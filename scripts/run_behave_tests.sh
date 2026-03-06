@@ -74,10 +74,18 @@ if [[ "$FORCE_BUILD" == "true" ]] || ! docker image inspect "$IMAGE_NAME" >/dev/
     docker build -t "$IMAGE_NAME" "$BASE_DIR"
 fi
 
-docker run --rm \
-    --entrypoint /app/scripts/run_behave_tests.sh \
-    -e AIR_QUALITY_TEST_IN_DOCKER=1 \
-    -v "$BASE_DIR:/app" \
-    -w /app \
-    "$IMAGE_NAME" \
-    --inside "${BEHAVE_ARGS[@]}"
+DOCKER_CMD=(
+    docker run --rm
+    --entrypoint /app/scripts/run_behave_tests.sh
+    -e AIR_QUALITY_TEST_IN_DOCKER=1
+    -v "$BASE_DIR:/app"
+    -w /app
+    "$IMAGE_NAME"
+    --inside
+)
+
+if [[ ${#BEHAVE_ARGS[@]} -gt 0 ]]; then
+    DOCKER_CMD+=("${BEHAVE_ARGS[@]}")
+fi
+
+"${DOCKER_CMD[@]}"
