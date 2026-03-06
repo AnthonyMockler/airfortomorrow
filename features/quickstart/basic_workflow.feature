@@ -1,0 +1,30 @@
+@quickstart
+Feature: Quick Start Workflow
+  Validate the core README quickstart workflow in atomic BDD scenarios.
+
+  Scenario: README contains the documented first-run command path
+    Given the file "README.md" should exist
+    Then the file "README.md" should contain "./scripts/setup.sh"
+    And the file "README.md" should contain "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --generate-maps --parallel"
+
+  Scenario: env_template can be copied into a valid .env file in a clean workspace
+    Given I create a temporary quickstart workspace
+    When I copy "env_template" to ".env" in the temporary quickstart workspace
+    Then the path ".env" in the temporary quickstart workspace should be a regular file
+    And the temporary quickstart ".env" file should contain required credential keys
+
+  Scenario: complete pipeline wrapper executes in atomic mode and writes a log
+    When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-himawari --skip-firms --skip-era5 --skip-openaq --skip-airgradient --skip-silver --skip-prediction" with timeout 120
+    Then the command should succeed
+    And the command output should contain "COMPLETE AIR QUALITY PIPELINE STARTING"
+    And the command output should contain "No pipelines selected to run!"
+    And the command output should contain "COMPLETE PIPELINE EXECUTION FINISHED SUCCESSFULLY!"
+    And the command output should reference an existing log file
+
+  @slow @live
+  Scenario: full realtime quickstart command produces core output artifacts
+    When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --generate-maps --parallel" with timeout 4200
+    Then the command should succeed
+    And the directory "data/silver/realtime" should contain at least 1 files matching "*.parquet"
+    And the directory "data/predictions/data/realtime" should contain at least 1 files matching "*.parquet"
+    And the directory "data/predictions/map/realtime" should contain at least 1 files matching "*.png"
