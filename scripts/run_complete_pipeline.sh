@@ -113,6 +113,8 @@ GENERATE_MAPS=true
 MAP_RESOLUTION="$DEFAULT_MAP_RESOLUTION"
 TIMEOUT="$DEFAULT_TIMEOUT"
 MAX_WORKERS="$DEFAULT_MAX_WORKERS"
+TEST_MODE=false
+TEST_OPENAQ_LIMIT=5
 
 # Sensor validation flags (enabled by default)
 VALIDATE_SENSORS=true
@@ -138,6 +140,8 @@ OPTIONS:
     -s, --start-date DATE Start date for historical mode (YYYY-MM-DD)
     -e, --end-date DATE   End date for historical mode (YYYY-MM-DD)
     -p, --parallel        Run data collection in parallel (experimental)
+    --test-mode           Enable bounded test mode for collectors
+    --test-openaq-limit N OpenAQ location cap when --test-mode is enabled (default: 5)
     --generate-maps       Generate prediction maps
     --map-resolution RES  H3 resolution for maps (default: from config)
     --skip-silver         Skip silver dataset generation
@@ -278,6 +282,16 @@ while [[ $# -gt 0 ]]; do
             PYTHON_ARGS="$PYTHON_ARGS --parallel"
             shift
             ;;
+        --test-mode)
+            TEST_MODE=true
+            PYTHON_ARGS="$PYTHON_ARGS --test-mode"
+            shift
+            ;;
+        --test-openaq-limit)
+            TEST_OPENAQ_LIMIT="$2"
+            PYTHON_ARGS="$PYTHON_ARGS --test-openaq-limit $2"
+            shift 2
+            ;;
         --verbose)
             PYTHON_ARGS="$PYTHON_ARGS --verbose"
             shift
@@ -315,6 +329,7 @@ else
     log "  Execution mode: Sequential"
 fi
 log "  Generate maps: $([ "$GENERATE_MAPS" = true ] && echo "Yes (resolution $MAP_RESOLUTION)" || echo "No")"
+log "  Test mode: $([ "$TEST_MODE" = true ] && echo "ENABLED (OpenAQ limit: $TEST_OPENAQ_LIMIT)" || echo "DISABLED")"
 log "  Sensor validation: $([ "$VALIDATE_SENSORS" = true ] && echo "ENABLED" || echo "DISABLED")"
 log "  Enhanced maps: $([ "$ENHANCED_MAPS" = true ] && echo "ENABLED" || echo "DISABLED")"
 log "  Save validation: $([ "$SAVE_VALIDATION" = true ] && echo "ENABLED" || echo "DISABLED")"

@@ -14,7 +14,7 @@ Feature: Quick Start Workflow
     And the temporary quickstart ".env" file should contain required credential keys
 
   Scenario: complete pipeline wrapper executes in atomic mode and writes a log
-    When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-himawari --skip-firms --skip-era5 --skip-openaq --skip-airgradient --skip-silver --skip-prediction" with timeout 120
+    When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-himawari --skip-firms --skip-era5 --skip-openaq --skip-airgradient --skip-silver --skip-prediction --test-mode --test-openaq-limit 3" with timeout 120
     Then the command should succeed
     And the command output should contain "COMPLETE AIR QUALITY PIPELINE STARTING"
     And the command output should contain "No pipelines selected to run!"
