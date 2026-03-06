@@ -35,6 +35,11 @@ PRESERVED_TRACKED_DATA_PREFIXES = (
     "data/raw/firms/historical/",
 )
 
+ERROR_LOG_MARKERS = [
+    re.compile(r"\bERROR\b"),
+    re.compile(r"Traceback \(most recent call last\)"),
+]
+
 
 def _resolve_path(context, raw_path: str) -> Path:
     candidate = Path(raw_path)
@@ -186,6 +191,27 @@ def step_current_run_logs_no_auth_failures(context):
     )
 
 
+@then("the referenced log file should not contain unexpected error markers")
+def step_referenced_log_has_no_error_markers(context):
+    log_path = getattr(context, "last_referenced_log_path", None)
+    assert log_path is not None, "No referenced log path is available in scenario context."
+    assert log_path.exists(), f"Referenced log does not exist: {log_path}"
+    assert log_path.is_file(), f"Referenced log is not a file: {log_path}"
+
+    matched_lines = []
+    lines = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    for line_number, line in enumerate(lines, start=1):
+        for marker in ERROR_LOG_MARKERS:
+            if marker.search(line):
+                matched_lines.append(f"{line_number}: {line}")
+                break
+
+    assert not matched_lines, (
+        f"Unexpected error markers found in referenced log {log_path}:\n"
+        + "\n".join(matched_lines[:20])
+    )
+
+
 @then('the directory "{path}" should contain at least {count:d} files matching "{pattern}"')
 def step_directory_contains_matching_files(context, path: str, count: int, pattern: str):
     directory = _resolve_path(context, path)
@@ -195,6 +221,30 @@ def step_directory_contains_matching_files(context, path: str, count: int, patte
     assert len(matches) >= count, (
         f"Expected at least {count} files matching {pattern} in {directory}, "
         f"found {len(matches)}"
+    )
+
+
+@then('the directory "{path}" should contain at least {count:d} files matching "{pattern}" updated by the current command')
+def step_directory_contains_fresh_matching_files(context, path: str, count: int, pattern: str):
+    result = context.last_result
+    assert result is not None, "No command has been executed in this scenario."
+
+    directory = _resolve_path(context, path)
+    assert directory.exists(), f"Directory does not exist: {directory}"
+    assert directory.is_dir(), f"Path is not a directory: {directory}"
+
+    updated_paths = set(result.updated_data_files)
+    all_matches = [candidate for candidate in directory.glob(pattern) if candidate.is_file()]
+    fresh_matches = [
+        candidate.relative_to(context.repo_root).as_posix()
+        for candidate in all_matches
+        if candidate.relative_to(context.repo_root).as_posix() in updated_paths
+    ]
+
+    assert len(fresh_matches) >= count, (
+        f"Expected at least {count} files matching {pattern} in {directory} "
+        f"updated by the current command, found {len(fresh_matches)}. "
+        f"Fresh matches: {fresh_matches}"
     )
 
 
