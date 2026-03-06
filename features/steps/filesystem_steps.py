@@ -16,6 +16,17 @@ REQUIRED_ENV_KEYS = [
     "OPENAQ_API_KEY",
 ]
 
+COMPONENT_LOG_PREFIXES = ("openaq_realtime_", "integrated_realtime_pipeline_")
+
+AUTH_FAILURE_PATTERNS = [
+    re.compile(r"Invalid credentials", re.IGNORECASE),
+    re.compile(r"\bHTTP\s*401\b", re.IGNORECASE),
+    re.compile(r"\bHTTP\s*403\b", re.IGNORECASE),
+    re.compile(r"NotAuthorized", re.IGNORECASE),
+    re.compile(r"Login incorrect", re.IGNORECASE),
+    re.compile(r"FTP username and password must be provided", re.IGNORECASE),
+]
+
 
 def _resolve_path(context, raw_path: str) -> Path:
     candidate = Path(raw_path)
@@ -78,6 +89,61 @@ def step_command_output_has_log_file(context):
     log_path = _resolve_path(context, log_path_text)
     assert log_path.exists(), f"Referenced log file does not exist: {log_path}"
     assert log_path.is_file(), f"Referenced log path is not a file: {log_path}"
+    context.last_referenced_log_path = log_path
+
+
+@then("the current run should generate OpenAQ and Himawari component logs")
+def step_current_run_has_component_logs(context):
+    result = context.last_result
+    assert result is not None, "No command has been executed in this scenario."
+    assert result.new_log_files, "No new log files were created during this command."
+
+    new_log_names = [Path(log_path).name for log_path in result.new_log_files]
+    missing_prefixes = [
+        prefix
+        for prefix in COMPONENT_LOG_PREFIXES
+        if not any(name.startswith(prefix) for name in new_log_names)
+    ]
+    assert not missing_prefixes, (
+        "Expected component logs were not created. "
+        f"Missing prefixes: {missing_prefixes}. "
+        f"New logs: {new_log_names}"
+    )
+
+
+@then("the current run logs should not contain authentication or credential failures")
+def step_current_run_logs_no_auth_failures(context):
+    result = context.last_result
+    assert result is not None, "No command has been executed in this scenario."
+
+    candidate_logs = [
+        _resolve_path(context, relative_log_path)
+        for relative_log_path in result.new_log_files
+    ]
+
+    referenced_log_path = getattr(context, "last_referenced_log_path", None)
+    if referenced_log_path is not None and referenced_log_path not in candidate_logs:
+        candidate_logs.append(referenced_log_path)
+
+    assert candidate_logs, "No candidate log files found for authentication checks."
+
+    failures = []
+    for log_path in candidate_logs:
+        if not log_path.exists() or not log_path.is_file():
+            continue
+        content = log_path.read_text(encoding="utf-8", errors="ignore")
+        for pattern in AUTH_FAILURE_PATTERNS:
+            match = pattern.search(content)
+            if match:
+                failures.append(
+                    f"{log_path}: matched '{pattern.pattern}' around '{match.group(0)}'"
+                )
+                break
+
+    assert not failures, (
+        "Detected authentication/credential failures in logs for this run:\n"
+        + "\n".join(failures)
+    )
 
 
 @then('the directory "{path}" should contain at least {count:d} files matching "{pattern}"')
