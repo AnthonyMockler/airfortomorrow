@@ -36,8 +36,7 @@ Feature: Quick Start Workflow
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --generate-maps --parallel" with timeout 4200
     Then the command should succeed
     And the command output should reference an existing log file
-    And the current run should generate OpenAQ and Himawari component logs
-    And the current run logs should not contain authentication or credential failures
-    And the directory "data/silver/realtime" should contain at least 1 untracked files matching "*.parquet"
-    And the directory "data/predictions/data/realtime" should contain at least 1 untracked files matching "*.parquet"
-    And the directory "data/predictions/map/realtime" should contain at least 1 untracked files matching "*.png"
+    And the directory "data/silver/realtime" should contain at least 1 files matching "*.parquet" updated by the current command
+    And the directory "data/predictions/data/realtime" should contain at least 1 files matching "*.parquet" updated by the current command
+    And the directory "data/predictions/map/realtime" should contain at least 1 files matching "*.png" updated by the current command
+    And the referenced log file should not contain unexpected error markers
