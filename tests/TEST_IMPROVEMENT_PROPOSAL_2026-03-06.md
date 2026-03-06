@@ -32,3 +32,27 @@
 - Run `@quickstart and not @live` to confirm fast path remains stable.
 - Run focused live auth scenario to verify auth failure detection still trips correctly.
 - Run `@slow` scenario to confirm fresh artifact assertions execute and log-integrity checks behave as intended.
+
+## Implementation Status (2026-03-07)
+- Implemented:
+  - command-scoped `data/` freshness snapshot in Behave environment;
+  - fresh-artifact step (`updated by the current command`);
+  - referenced-log error marker assertion;
+  - slow scenario reordered so artifact checks execute before log-integrity gate.
+- Verified by rerun:
+  - full all-tags run (`--tags='~@__never__'`) executed all 32 scenarios;
+  - fresh-artifact steps passed in slow scenario;
+  - slow scenario correctly failed on hidden `ERROR`/traceback markers in the referenced pipeline log.
+
+## Next Improvement Candidates
+1. Add content-level artifact assertions.
+- Validate parquet row-count > 0 and required columns for silver/prediction outputs.
+- Validate map PNG is newly written and non-trivial (size threshold + decode check).
+
+2. Split live credential expectations into explicit modes.
+- Keep current strict live scenario for credentialed environments.
+- Add a separate negative-credentials scenario (or tag) that expects auth failure markers, so intent is explicit.
+
+3. Tighten log-integrity semantics.
+- Keep fail-on-traceback.
+- Optionally scope `ERROR` markers to known critical components to reduce false positives while preserving strictness.
