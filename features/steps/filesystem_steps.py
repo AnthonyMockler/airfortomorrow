@@ -27,12 +27,29 @@ AUTH_FAILURE_PATTERNS = [
     re.compile(r"FTP username and password must be provided", re.IGNORECASE),
 ]
 
+PRESERVED_TRACKED_DATA_FILES = {
+    "data/training/silver_dataset.parquet",
+}
+
+PRESERVED_TRACKED_DATA_PREFIXES = (
+    "data/raw/firms/historical/",
+)
+
 
 def _resolve_path(context, raw_path: str) -> Path:
     candidate = Path(raw_path)
     if candidate.is_absolute():
         return candidate
     return context.repo_root / candidate
+
+
+def _is_preserved_tracked_data_path(repo_relative_path: str) -> bool:
+    if repo_relative_path in PRESERVED_TRACKED_DATA_FILES:
+        return True
+    return any(
+        repo_relative_path.startswith(prefix)
+        for prefix in PRESERVED_TRACKED_DATA_PREFIXES
+    )
 
 
 @given('the file "{path}" should exist')
@@ -77,6 +94,29 @@ def step_temp_workspace_env_contains_required_keys(context):
     content = env_path.read_text(encoding="utf-8")
     missing_keys = [key for key in REQUIRED_ENV_KEYS if key not in content]
     assert not missing_keys, f"Missing keys in {env_path}: {missing_keys}"
+
+
+@given('I clean the "{path}" directory while preserving git-tracked files')
+def step_clean_directory_preserving_tracked(context, path: str):
+    root = _resolve_path(context, path)
+    assert root.exists(), f"Directory does not exist: {root}"
+    assert root.is_dir(), f"Path is not a directory: {root}"
+
+    for file_path in root.rglob("*"):
+        if not (file_path.is_file() or file_path.is_symlink()):
+            continue
+        rel_path = file_path.relative_to(context.repo_root).as_posix()
+        if not _is_preserved_tracked_data_path(rel_path):
+            file_path.unlink()
+
+    for dir_path in sorted(
+        (candidate for candidate in root.rglob("*") if candidate.is_dir()),
+        key=lambda candidate: len(candidate.parts),
+        reverse=True,
+    ):
+        if any(dir_path.iterdir()):
+            continue
+        dir_path.rmdir()
 
 
 @then("the command output should reference an existing log file")
@@ -155,4 +195,29 @@ def step_directory_contains_matching_files(context, path: str, count: int, patte
     assert len(matches) >= count, (
         f"Expected at least {count} files matching {pattern} in {directory}, "
         f"found {len(matches)}"
+    )
+
+
+@then('the directory "{path}" should contain at least {count:d} untracked files matching "{pattern}"')
+def step_directory_contains_untracked_matching_files(
+    context, path: str, count: int, pattern: str
+):
+    directory = _resolve_path(context, path)
+    assert directory.exists(), f"Directory does not exist: {directory}"
+    assert directory.is_dir(), f"Path is not a directory: {directory}"
+    all_matches = [candidate for candidate in directory.glob(pattern) if candidate.is_file()]
+
+    untracked_matches = []
+    tracked_matches = []
+    for candidate in all_matches:
+        rel_path = candidate.relative_to(context.repo_root).as_posix()
+        if _is_preserved_tracked_data_path(rel_path):
+            tracked_matches.append(rel_path)
+        else:
+            untracked_matches.append(rel_path)
+
+    assert len(untracked_matches) >= count, (
+        f"Expected at least {count} untracked files matching {pattern} in {directory}, "
+        f"found {len(untracked_matches)} untracked and {len(tracked_matches)} tracked matches. "
+        f"Tracked matches: {tracked_matches}"
     )

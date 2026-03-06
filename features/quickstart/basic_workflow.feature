@@ -23,6 +23,7 @@ Feature: Quick Start Workflow
 
   @live
   Scenario: realtime run surfaces authentication failures from component logs
+    Given I clean the "data" directory while preserving git-tracked files
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-firms --skip-era5 --skip-airgradient --skip-silver --skip-prediction --parallel" with timeout 900
     Then the command should succeed
     And the command output should reference an existing log file
@@ -31,11 +32,12 @@ Feature: Quick Start Workflow
 
   @slow @live
   Scenario: full realtime quickstart command produces core output artifacts
+    Given I clean the "data" directory while preserving git-tracked files
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --generate-maps --parallel" with timeout 4200
     Then the command should succeed
     And the command output should reference an existing log file
     And the current run should generate OpenAQ and Himawari component logs
     And the current run logs should not contain authentication or credential failures
-    And the directory "data/silver/realtime" should contain at least 1 files matching "*.parquet"
-    And the directory "data/predictions/data/realtime" should contain at least 1 files matching "*.parquet"
-    And the directory "data/predictions/map/realtime" should contain at least 1 files matching "*.png"
+    And the directory "data/silver/realtime" should contain at least 1 untracked files matching "*.parquet"
+    And the directory "data/predictions/data/realtime" should contain at least 1 untracked files matching "*.parquet"
+    And the directory "data/predictions/map/realtime" should contain at least 1 untracked files matching "*.png"
