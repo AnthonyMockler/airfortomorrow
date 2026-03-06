@@ -24,7 +24,7 @@ Feature: Quick Start Workflow
   @live
   Scenario: realtime run surfaces authentication failures from component logs
     Given I clean the "data" directory while preserving git-tracked files
-    When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-firms --skip-era5 --skip-airgradient --skip-silver --skip-prediction --parallel" with timeout 900
+    When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-firms --skip-era5 --skip-airgradient --skip-silver --skip-prediction --parallel --test-mode --test-openaq-limit 3" with timeout 900
     Then the command should succeed
     And the command output should reference an existing log file
     And the current run should generate OpenAQ and Himawari component logs

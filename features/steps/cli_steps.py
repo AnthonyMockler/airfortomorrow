@@ -49,6 +49,10 @@ def step_run_command_with_timeout(context, command: str, timeout: int):
 @then("the command should succeed")
 def step_command_should_succeed(context):
     result = _require_last_result(context)
+    if getattr(result, "timed_out", False):
+        raise AssertionError(
+            f"Command timed out after {result.timeout_seconds}s.\n{result.output}"
+        )
     assert result.returncode == 0, result.output
 
 
