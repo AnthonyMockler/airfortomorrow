@@ -24,10 +24,151 @@ from src.data_collectors.openaq_collector import OpenAQCollector
 # Configuration for parallel processing
 MAX_WORKERS = 2  # Reduced from 4 - Number of concurrent workers
 BATCH_SIZE = 10   # Reduced from 15 - Sensors per batch  
-RATE_LIMIT_DELAY = 2.0  # Increased from 0.5 - Proactive delay between requests
-RATE_LIMIT_FREQUENCY = 1  # Reduced from 5 - Apply delay after every request
+MEASUREMENTS_LIMIT = 500
+MAX_SENSOR_RETRIES = 3
+FALLBACK_RATE_LIMIT_WAIT_SECONDS = 60.0
+RESET_JITTER_SECONDS = 0.25
 
-def get_single_sensor_data(sensor_id, from_date, to_date, api_key):
+try:
+    from openaq.shared.exceptions import RateLimitError, HTTPRateLimitError
+except Exception:  # pragma: no cover - defensive fallback for SDK layout changes
+    RateLimitError = type("RateLimitError", (Exception,), {})
+    HTTPRateLimitError = type("HTTPRateLimitError", (Exception,), {})
+
+
+class SharedRateAwareOpenAQGateway:
+    """
+    Thread-safe OpenAQ request gateway.
+
+    Worker threads remain concurrent for orchestration, but all API calls pass
+    through one shared client and one rate-aware lock-protected control path.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        measurements_limit: int = MEASUREMENTS_LIMIT,
+        max_retries: int = MAX_SENSOR_RETRIES,
+        fallback_rate_limit_wait_seconds: float = FALLBACK_RATE_LIMIT_WAIT_SECONDS,
+        reset_jitter_seconds: float = RESET_JITTER_SECONDS,
+    ):
+        self.client = OpenAQ(api_key=api_key)
+        self.measurements_limit = measurements_limit
+        self.max_retries = max_retries
+        self.fallback_rate_limit_wait_seconds = fallback_rate_limit_wait_seconds
+        self.reset_jitter_seconds = reset_jitter_seconds
+
+        self._lock = threading.Lock()
+        self._next_allowed_monotonic = 0.0
+
+        self.requests_attempted = 0
+        self.retries = 0
+        self.rate_limit_errors = 0
+        self.http_rate_limit_errors = 0
+        self.total_wait_seconds = 0.0
+
+    def close(self) -> None:
+        """Close underlying SDK resources."""
+        try:
+            self.client.close()
+        except Exception:
+            pass
+
+    def _wait_if_needed_locked(self) -> None:
+        now = time.monotonic()
+        if now >= self._next_allowed_monotonic:
+            return
+        wait_seconds = self._next_allowed_monotonic - now
+        self.total_wait_seconds += wait_seconds
+        time.sleep(wait_seconds)
+
+    def _schedule_next_allowed_locked(self, wait_seconds: float, with_jitter: bool = True) -> None:
+        jitter_seconds = self.reset_jitter_seconds if with_jitter else 0.0
+        target = time.monotonic() + max(0.0, wait_seconds) + jitter_seconds
+        if target > self._next_allowed_monotonic:
+            self._next_allowed_monotonic = target
+
+    def _read_rate_limit_reset_seconds_locked(self) -> float:
+        reset_seconds = getattr(self.client, "_rate_limit_reset_seconds", None)
+        if reset_seconds is None:
+            return self.fallback_rate_limit_wait_seconds
+        try:
+            reset_value = float(reset_seconds)
+        except Exception:
+            return self.fallback_rate_limit_wait_seconds
+        if reset_value < 0:
+            return 0.0
+        return reset_value
+
+    def _apply_post_success_rate_state_locked(self) -> None:
+        """
+        Pace future calls from SDK-reported rate state.
+
+        The SDK updates `_rate_limit_remaining` and reset timing after each
+        response. To keep throughput high, only schedule a wait when remaining
+        budget is exhausted.
+        """
+        remaining = getattr(self.client, "_rate_limit_remaining", None)
+        if remaining is None:
+            return
+        try:
+            remaining_value = float(remaining)
+        except Exception:
+            return
+
+        if remaining_value <= 0:
+            reset_seconds = self._read_rate_limit_reset_seconds_locked()
+            self._schedule_next_allowed_locked(reset_seconds, with_jitter=True)
+
+    def fetch_measurements(self, sensor_id: str, from_date: str, to_date: str):
+        """Rate-aware request for one sensor with retry handling."""
+        attempt = 0
+        while True:
+            with self._lock:
+                self._wait_if_needed_locked()
+                self.requests_attempted += 1
+                try:
+                    response = self.client.measurements.list(
+                        sensors_id=sensor_id,
+                        datetime_from=from_date,
+                        datetime_to=to_date,
+                        limit=self.measurements_limit,
+                    )
+                    self._apply_post_success_rate_state_locked()
+                    return response
+                except RateLimitError:
+                    self.rate_limit_errors += 1
+                    if attempt >= self.max_retries:
+                        raise
+                    attempt += 1
+                    self.retries += 1
+                    self._schedule_next_allowed_locked(
+                        self._read_rate_limit_reset_seconds_locked(),
+                        with_jitter=True,
+                    )
+                    continue
+                except HTTPRateLimitError:
+                    self.http_rate_limit_errors += 1
+                    if attempt >= self.max_retries:
+                        raise
+                    attempt += 1
+                    self.retries += 1
+                    self._schedule_next_allowed_locked(
+                        self._read_rate_limit_reset_seconds_locked(),
+                        with_jitter=True,
+                    )
+                    continue
+                except Exception:
+                    # Non-rate-limit transient error retry path with short backoff.
+                    if attempt >= self.max_retries:
+                        raise
+                    attempt += 1
+                    self.retries += 1
+                    backoff_seconds = min(8.0, 2.0 ** attempt)
+                    self._schedule_next_allowed_locked(backoff_seconds, with_jitter=False)
+                    continue
+
+def get_single_sensor_data(sensor_id: str, from_date: str, to_date: str, gateway: SharedRateAwareOpenAQGateway):
     """
     Get data for a single sensor.
     
@@ -35,35 +176,13 @@ def get_single_sensor_data(sensor_id, from_date, to_date, api_key):
         sensor_id: Sensor ID to query
         from_date: Start date for data collection
         to_date: End date for data collection
-        api_key: OpenAQ API key
+        gateway: Shared rate-aware OpenAQ request gateway
         
     Returns:
         DataFrame with sensor data, or empty DataFrame if no data/error
     """
-    # Add proactive rate limiting delay
-    time.sleep(RATE_LIMIT_DELAY)
-    
-    client = OpenAQ(api_key=api_key)
-    
     try:
-        response = client.measurements.list(
-            sensors_id=sensor_id,
-            datetime_from=from_date,
-            datetime_to=to_date,
-            limit=500
-        )
-        
-        # Handle rate limiting
-        if str(response) == "<Response [429]>" or str(response) == "ERROR:openaq:Rate limit exceeded":
-            print(f"{sensor_id} - rate limit - waiting...")
-            time.sleep(60)
-            
-            response = client.measurements.list(
-                sensors_id=sensor_id,
-                datetime_from=from_date,
-                datetime_to=to_date,
-                limit=500
-            )
+        response = gateway.fetch_measurements(sensor_id, from_date, to_date)
         
         # Process response
         data_measurements = response.dict()
@@ -93,47 +212,10 @@ def get_single_sensor_data(sensor_id, from_date, to_date, api_key):
         return df_hourly_data, "success"
         
     except Exception as e:
-        # Try once more after waiting
-        try:
-            time.sleep(60)
-            response = client.measurements.list(
-                sensors_id=sensor_id,
-                datetime_from=from_date,
-                datetime_to=to_date,
-                limit=500
-            )
-            
-            data_measurements = response.dict()
-            df_hourly_data = json_normalize(data_measurements['results'])
-            
-            if len(df_hourly_data) == 0:
-                return pd.DataFrame(), "no_data"
-                
-            # Rename columns 
-            df_hourly_data = df_hourly_data.rename(columns={
-                'period.datetime_from.local': 'datetime_from_local',
-                'period.datetime_from.utc': 'datetime_from_utc',
-                'period.datetime_to.local': 'datetime_to_local',
-                'period.datetime_to.utc': 'datetime_to_utc',
-                'parameter.name': 'sensor_type',
-                'parameter.units': 'sensor_units'
-            })
+        print(f"{sensor_id} - failed: {str(e)}")
+        return pd.DataFrame(), "error"
 
-            # Re-integrate sensor id
-            df_hourly_data['sensor_id'] = sensor_id
-            
-            # Keep only relevant columns
-            df_hourly_data = df_hourly_data[["value", "datetime_from_utc", "datetime_from_local", 
-                                           "datetime_to_utc", "datetime_to_local", "sensor_type", 
-                                           "sensor_units", "sensor_id"]]
-            
-            return df_hourly_data, "success"
-            
-        except Exception as retry_e:
-            print(f"{sensor_id} - failed after retry: {str(retry_e)}")
-            return pd.DataFrame(), "error"
-
-def process_sensor_batch(sensor_batch, from_date, to_date, api_key):
+def process_sensor_batch(sensor_batch, from_date, to_date, gateway: SharedRateAwareOpenAQGateway):
     """
     Process a batch of sensors concurrently.
     
@@ -141,7 +223,7 @@ def process_sensor_batch(sensor_batch, from_date, to_date, api_key):
         sensor_batch: List of sensor IDs to process
         from_date: Start date for data collection
         to_date: End date for data collection
-        api_key: OpenAQ API key
+        gateway: Shared rate-aware OpenAQ request gateway
         
     Returns:
         List of DataFrames with results, and statistics dict
@@ -152,7 +234,7 @@ def process_sensor_batch(sensor_batch, from_date, to_date, api_key):
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         # Submit all tasks
         future_to_sensor = {
-            executor.submit(get_single_sensor_data, sensor_id, from_date, to_date, api_key): sensor_id 
+            executor.submit(get_single_sensor_data, sensor_id, from_date, to_date, gateway): sensor_id 
             for sensor_id in sensor_batch
         }
         
@@ -174,7 +256,7 @@ def process_sensor_batch(sensor_batch, from_date, to_date, api_key):
     
     return results, stats
 
-def get_sensors_data(sensor_list, from_date, to_date, api_key, gdf_sensors):
+def get_sensors_data(sensor_list, from_date, to_date, gateway: SharedRateAwareOpenAQGateway, gdf_sensors):
     """
     Get measurements data for a list of sensors using parallel processing.
     
@@ -182,7 +264,7 @@ def get_sensors_data(sensor_list, from_date, to_date, api_key, gdf_sensors):
         sensor_list: List of sensor IDs
         from_date: Start date for data collection
         to_date: End date for data collection
-        api_key: OpenAQ API key
+        gateway: Shared rate-aware OpenAQ request gateway
         gdf_sensors: DataFrame with sensor metadata
         
     Returns:
@@ -209,7 +291,7 @@ def get_sensors_data(sensor_list, from_date, to_date, api_key, gdf_sensors):
             pbar.set_description(f"Batch {batch_num}/{total_batches}")
             
             # Process batch in parallel
-            batch_results, batch_stats = process_sensor_batch(batch, from_date, to_date, api_key)
+            batch_results, batch_stats = process_sensor_batch(batch, from_date, to_date, gateway)
             
             # Collect results
             all_data.extend(batch_results)
@@ -226,13 +308,17 @@ def get_sensors_data(sensor_list, from_date, to_date, api_key, gdf_sensors):
                 errors=total_stats["errors"]
             )
             
-            # Add delay between batches to avoid overwhelming the API
-            if batch_num < total_batches:  # Don't delay after the last batch
-                time.sleep(5.0)  # 5 second delay between batches
-    
     # Display final statistics
     print(f"\nCollection completed: {total_stats['success']} successful, "
           f"{total_stats['no_data']} no data, {total_stats['errors']} errors")
+    print(
+        "Rate-aware gateway stats: "
+        f"requests_attempted={gateway.requests_attempted}, "
+        f"retries={gateway.retries}, "
+        f"rate_limit_errors={gateway.rate_limit_errors}, "
+        f"http_rate_limit_errors={gateway.http_rate_limit_errors}, "
+        f"wait_seconds={gateway.total_wait_seconds:.2f}"
+    )
 
     # Combine all data
     if not all_data:
@@ -365,13 +451,20 @@ def main():
     
     # Collect sensor data
     print("\nCollecting real-time data...")
-    df_data = get_sensors_data(
-        sensor_list,
-        from_date.strftime("%Y-%m-%d"),
-        to_date.strftime("%Y-%m-%d"),
-        api_key,
-        gdf_sensors
+    gateway = SharedRateAwareOpenAQGateway(
+        api_key=api_key,
+        measurements_limit=MEASUREMENTS_LIMIT,
     )
+    try:
+        df_data = get_sensors_data(
+            sensor_list,
+            from_date.strftime("%Y-%m-%d"),
+            to_date.strftime("%Y-%m-%d"),
+            gateway,
+            gdf_sensors
+        )
+    finally:
+        gateway.close()
     
     # Calculate time taken
     elapsed_time = time.time() - start_time
