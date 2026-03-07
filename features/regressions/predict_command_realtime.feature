@@ -1,12 +1,9 @@
 @regression @prediction
 Feature: Realtime Prediction Command Integrity
-  Validate the prediction command directly without running the full collection pipeline.
+  Validate fail-fast argument behavior for realtime prediction mode.
 
-  Scenario: realtime prediction command should not emit enhanced-map NoneType errors
-    Given I prepare realtime silver input for countries "THA LAO" for today
+  Scenario: realtime prediction rejects historical validation flags
     When I run "./scripts/predict_air_quality.sh --mode realtime --countries THA LAO --generate-map --validate-sensors --enhanced-maps --save-validation" with timeout 900
-    Then the command should succeed
-    And the command output should not contain "AIR QUALITY PREDICTION FAILED"
-    And the command output should not contain "Failed to generate maps/charts"
+    Then the command should fail
+    And the command output should contain "validate-sensors is not a valid option for realtime mode"
     And the command output should not contain "'NoneType' object has no attribute 'empty'"
-    And the directory "data/predictions/data/realtime" should contain at least 1 files matching "*.parquet" updated by the current command

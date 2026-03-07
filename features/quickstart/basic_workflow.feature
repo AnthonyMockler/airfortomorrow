@@ -17,6 +17,7 @@ Feature: Quick Start Workflow
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-himawari --skip-firms --skip-era5 --skip-openaq --skip-airgradient --skip-silver --skip-prediction --test-mode --test-openaq-limit 3" with timeout 120
     Then the command should succeed
     And the command output should contain "COMPLETE AIR QUALITY PIPELINE STARTING"
+    And the command output should contain "Sensor validation: N/A (historical mode only)"
     And the command output should contain "No pipelines selected to run!"
     And the command output should contain "COMPLETE PIPELINE EXECUTION FINISHED SUCCESSFULLY!"
     And the command output should reference an existing log file
