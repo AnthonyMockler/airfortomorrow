@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import shutil
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from behave import given, then, when
@@ -76,6 +77,33 @@ def step_file_should_contain(context, path: str, text: str):
 def step_create_temp_quickstart_workspace(context):
     workspace = Path(tempfile.mkdtemp(prefix="air_quality_quickstart_"))
     context.quickstart_workspace = workspace
+
+
+@given('I prepare realtime silver input for countries "{countries}" for today')
+def step_prepare_realtime_silver_for_today(context, countries: str):
+    country_codes = sorted(code.strip() for code in countries.split() if code.strip())
+    assert country_codes, "No country codes were provided."
+
+    silver_dir = context.repo_root / "data" / "silver" / "realtime"
+    assert silver_dir.exists(), f"Silver directory does not exist: {silver_dir}"
+
+    countries_key = "_".join(country_codes)
+    source_candidates = sorted(
+        silver_dir.glob(f"silver_realtime_{countries_key}_*.parquet"),
+        key=lambda candidate: candidate.stat().st_mtime_ns,
+        reverse=True,
+    )
+    assert source_candidates, (
+        f"No realtime silver files found for countries {countries_key} in {silver_dir}"
+    )
+
+    source_path = source_candidates[0]
+    today_str = datetime.now().strftime("%Y%m%d")
+    target_path = silver_dir / f"silver_realtime_{countries_key}_{today_str}.parquet"
+
+    if source_path != target_path:
+        shutil.copy2(source_path, target_path)
+    assert target_path.exists(), f"Prepared silver file does not exist: {target_path}"
 
 
 @when('I copy "{source}" to "{destination}" in the temporary quickstart workspace')
