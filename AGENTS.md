@@ -43,6 +43,50 @@ End-to-end Air Quality Prediction pipeline combining ground sensor data (OpenAQ,
 - **Data Pipeline Flow:** `collectors (API -> raw parquet)` -> `processors (raw -> H3-indexed parquet)` -> `make_silver (merge)` -> `model (predict)`.
 - **Modes:** Most collectors/processors support `realtime` and `historical`; some shell scripts are explicitly mode-specific (`collect_openaq_realtime.sh`, `collect_openaq_historical.sh`, `run_himawari_aod_realtime.sh`, `run_himawari_aod_historical.sh`).
 
+## MANDATORY DEVELOPMENT WORKFLOW (ALL WORK)
+Every code change in this repository must follow this exact workflow. This is required for all feature work, bug fixes, and regressions.
+
+### 1) Document first (before code changes)
+1. Create a decision note in `decisions/`:
+   - File pattern: `YYYY-MM-DD-<short-slug>.md`
+   - Include: `Decision`, `Why`, `Change Scope`, `Non-Goals`
+2. Create an execution plan in `plans/`:
+   - File pattern: `YYYY-MM-DD-<short-slug>-tdd-plan.md`
+   - Include: `Feature Goal`, `Red`, `Green`, `Regression Safety`, `Success Criteria`, `Evidence to Capture`
+
+### 2) Test first using Behave BDD (RED)
+1. Write or update a `.feature` scenario in `features/` before implementation.
+2. Use clear Gherkin behavior language focused on user-observable outcomes.
+3. Run the smallest targeted Behave command and confirm it fails for the expected reason.
+4. Record the failing command and core failure signal as evidence.
+
+### 3) Implement minimal change (GREEN)
+1. Apply the smallest code change that makes the new Behave scenario pass.
+2. Prefer fail-fast argument validation and explicit error messages for invalid combinations.
+3. Do not widen scope during the green phase.
+
+### 4) Verify and harden
+1. Re-run the new scenario(s) and related regression/contract scenarios with Behave.
+2. For quickstart/workflow behavior, verify via Behave scenarios (not ad hoc shell-only validation).
+3. Ensure tests validate fresh artifacts from the current run, not stale cached files.
+
+### 5) Commit structure
+Use separate commits by phase so rollback/cherry-pick remains safe:
+1. Docs commit: `decisions/` and `plans/`
+2. Test commit: new/updated Behave scenarios and step definitions
+3. Implementation commit: production code changes required to satisfy tests
+
+### Required tooling and style
+- Behave BDD is the default and required style for integration/workflow behavior tests.
+- Prefer running Behave via `./scripts/run_behave_tests.sh` (Docker harness).
+- Keep scenarios atomic and behavior-focused; avoid coupling one scenario to multiple independent outcomes.
+
+### Anti-patterns (not allowed)
+- Writing implementation before producing a failing Behave scenario.
+- Treating manual shell runs as a substitute for Behave acceptance/regression tests.
+- Passing tests because of pre-existing cached outputs instead of current-run artifacts.
+- Allowing mode-invalid flags/options to pass silently instead of failing fast.
+
 ## ANTI-PATTERNS (THIS PROJECT)
 - **Direct execution of `src/` modules without `PYTHONPATH`:** Always invoke via shell wrappers in `scripts/` which handle working directories properly.
 - **Usage of `_load_config()` in `BaseCollector`:** DEPRECATED. Use `self.config_loader` instead.
