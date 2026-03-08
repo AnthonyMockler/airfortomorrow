@@ -1,3 +1,5 @@
+> Status: Completed and verified on 2026-03-08. The planned ERA5 realtime AWS backoff changes already exist in `src/data_collectors/era5_meteorological_idw.py`, with coverage in `features/contracts/era5_realtime_contract.feature` and `features/steps/era5_steps.py`.
+
 # Feature Goal
 Speed up ERA5 realtime collection by removing fixed AWS sleeps and replacing them with adaptive retry/backoff behavior that preserves external contract behavior and output correctness.
 
