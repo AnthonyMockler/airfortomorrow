@@ -19,7 +19,8 @@ Repository tests use **Behave BDD** as the preferred style for workflow and cont
 
 ## EXECUTION RULES
 - Run BDD tests through Docker:
-  - `./scripts/run_behave_tests.sh`
+  - `./scripts/run_behave_tests_compact.sh` for routine agent-driven runs
+  - `./scripts/run_behave_tests.sh` only when full raw output is explicitly needed or when debugging the compact wrapper
 - Avoid host execution unless debugging locally with explicit opt-in.
 - Default Behave execution should exclude `@slow` and `@live`.
 

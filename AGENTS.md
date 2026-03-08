@@ -78,8 +78,17 @@ Use separate commits by phase so rollback/cherry-pick remains safe:
 
 ### Required tooling and style
 - Behave BDD is the default and required style for integration/workflow behavior tests.
-- Prefer running Behave via `./scripts/run_behave_tests.sh` (Docker harness).
+- Prefer running Behave via `./scripts/run_behave_tests_compact.sh` for routine agent-driven runs.
+- Use `./scripts/run_behave_tests.sh` directly only when full raw output is explicitly needed or when debugging the compact wrapper itself.
 - Keep scenarios atomic and behavior-focused; avoid coupling one scenario to multiple independent outcomes.
+
+### Long-Running Test Commands
+- For Behave or pipeline runs expected to take more than 10 minutes, start the command once and prefer waiting for completion before checking again.
+- Prefer `./scripts/run_behave_tests_compact.sh` for long Behave runs so the final output stays concise.
+- Do not poll more often than once every 10-15 minutes for runs expected to take 30-90 minutes.
+- Do not tail Docker logs or raw output during the run unless the user explicitly asks or the run appears stuck.
+- Do not send interim progress updates unless output materially changes, the run fails, or the user explicitly asks for frequent updates.
+- Prefer reporting the final compact summary and raw-log path after the command exits.
 
 ### Anti-patterns (not allowed)
 - Writing implementation before producing a failing Behave scenario.
@@ -99,6 +108,9 @@ Use separate commits by phase so rollback/cherry-pick remains safe:
 
 # Run tests (Docker-only harness)
 ./scripts/run_tests.sh -- -q
+
+# Run Behave tests with compact agent-friendly output
+./scripts/run_behave_tests_compact.sh --tags=@smoke
 
 # Smoke test (forces Docker rebuild + validates core imports)
 ./scripts/smoke_test.sh
