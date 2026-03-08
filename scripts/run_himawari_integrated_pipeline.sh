@@ -45,6 +45,7 @@ if [[ "$CONFIG_AVAILABLE" == true ]]; then
     DEFAULT_BUFFER=$(get_config_buffer "himawari")
     DEFAULT_H3_RESOLUTION=$(get_config_h3_resolution)
     DEFAULT_TIMEOUT=$(get_config_timeout "processing_timeout")
+    DEFAULT_DOWNLOAD_WORKERS=$(get_config_max_workers)
     echo "✅ Using configuration system for defaults"
 else
     # Fallback defaults if config system unavailable
@@ -53,6 +54,7 @@ else
     DEFAULT_BUFFER=0.4
     DEFAULT_H3_RESOLUTION=8
     DEFAULT_TIMEOUT=7200
+    DEFAULT_DOWNLOAD_WORKERS=4
     echo "⚠️  Configuration system unavailable, using hardcoded defaults"
 fi
 
@@ -66,6 +68,7 @@ SKIP_INTERPOLATION=false
 TIMEOUT="$DEFAULT_TIMEOUT"
 BUFFER_DEGREES="$DEFAULT_BUFFER"
 H3_RESOLUTION="$DEFAULT_H3_RESOLUTION"
+DOWNLOAD_WORKERS="$DEFAULT_DOWNLOAD_WORKERS"
 
 # Function to log messages
 log() {
@@ -206,6 +209,7 @@ usage() {
     echo "  --skip-aggregation    Skip daily aggregation step"
     echo "  --skip-interpolation  Skip IDW interpolation step"
     echo "  --force-download      Force re-download of existing files"
+    echo "  --download-workers N  Realtime download worker threads (default: $DEFAULT_DOWNLOAD_WORKERS)"
     echo "  --timeout SECONDS     Processing timeout (default: ${DEFAULT_TIMEOUT}s)"
     echo "  --buffer DEGREES      Geographic buffer for boundaries (default: $DEFAULT_BUFFER)"
     echo "  --resolution LEVEL    H3 resolution level (default: $DEFAULT_H3_RESOLUTION)"
@@ -230,6 +234,7 @@ usage() {
     echo "  Default countries: ${DEFAULT_COUNTRIES[*]}"
     echo "  Default hours: $DEFAULT_HOURS"
     echo "  Default timeout: ${DEFAULT_TIMEOUT}s"
+    echo "  Default download workers: $DEFAULT_DOWNLOAD_WORKERS"
     echo "  Default buffer: ${DEFAULT_BUFFER}°"
     echo "  Default H3 resolution: $DEFAULT_H3_RESOLUTION"
     echo ""
@@ -238,6 +243,7 @@ usage() {
 
 # Parse command line arguments
 INTEGRATED_ARGS=""
+DOWNLOAD_WORKERS_SET=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --mode)
@@ -294,6 +300,12 @@ while [[ $# -gt 0 ]]; do
             INTEGRATED_ARGS="$INTEGRATED_ARGS --force-download"
             shift
             ;;
+        --download-workers)
+            DOWNLOAD_WORKERS="$2"
+            DOWNLOAD_WORKERS_SET=true
+            INTEGRATED_ARGS="$INTEGRATED_ARGS --download-workers $2"
+            shift 2
+            ;;
         --timeout)
             TIMEOUT="$2"
             INTEGRATED_ARGS="$INTEGRATED_ARGS --timeout $2"
@@ -318,6 +330,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$DOWNLOAD_WORKERS_SET" == false ]]; then
+    INTEGRATED_ARGS="$INTEGRATED_ARGS --download-workers $DOWNLOAD_WORKERS"
+fi
 
 # Validate parameters
 validate_mode_parameters
@@ -369,6 +385,12 @@ elif [[ "$MODE" == "realtime" ]]; then
     fi
 fi
 
+if ! [[ "$DOWNLOAD_WORKERS" =~ ^[0-9]+$ ]] || [[ "$DOWNLOAD_WORKERS" -lt 1 ]]; then
+    log "ERROR: --download-workers must be a positive integer"
+    echo "ERROR: --download-workers must be a positive integer. Current value: $DOWNLOAD_WORKERS"
+    exit 1
+fi
+
 # Log configuration
 log "Starting Himawari AOD Complete Pipeline..."
 log "Mode: $MODE"
@@ -379,6 +401,7 @@ fi
 log "Keep originals: $KEEP_ORIGINALS"
 log "Skip aggregation: $SKIP_AGGREGATION"
 log "Skip interpolation: $SKIP_INTERPOLATION"
+log "Realtime download workers: $DOWNLOAD_WORKERS"
 
 # STEP 1: Execute the integrated pipeline (download + H3 processing)
 log "=== STEP 1: INTEGRATED PIPELINE (Download + H3 Processing) ==="

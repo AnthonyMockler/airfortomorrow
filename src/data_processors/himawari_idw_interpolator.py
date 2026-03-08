@@ -169,7 +169,16 @@ def inverse_distance_weighting(
     return filled
 
 
-def create_boundary_grid(countries: List[str] = ["LAO", "THA"], buffer_degrees: float = 0.4) -> pl.LazyFrame:
+def _boundary_cache_path(boundary_cache_dir: str, country_code: str) -> Path:
+    return Path(boundary_cache_dir) / f"{country_code}_ADM0.geojson"
+
+
+def create_boundary_grid(
+    countries: List[str] = ["LAO", "THA"],
+    buffer_degrees: float = 0.4,
+    boundary_cache_dir: str = "./data/cache/geoboundaries",
+    refresh_boundary_cache: bool = False,
+) -> pl.LazyFrame:
     """
     Create H3 boundary grid for specified countries.
     Duplicates the exact structure from the validated notebook (no buffer for h3ronpy compatibility).
@@ -177,72 +186,101 @@ def create_boundary_grid(countries: List[str] = ["LAO", "THA"], buffer_degrees: 
     Args:
         countries: List of country codes
         buffer_degrees: Buffer around boundaries in degrees (not used with h3ronpy)
+        boundary_cache_dir: Cache directory for boundary GeoJSON files
+        refresh_boundary_cache: Force refresh of cached boundary files
         
     Returns:
         Polars LazyFrame with H3 boundary cells
     """
     logger = logging.getLogger(__name__)
     logger.info(f"Creating H3 boundary grid for countries: {countries}")
+    logger.info(
+        f"Boundary cache: {boundary_cache_dir} "
+        f"(refresh={'enabled' if refresh_boundary_cache else 'disabled'})"
+    )
     
     # Duplicate the exact structure from the notebook
     country_codes = countries  # Match notebook variable name
     all_boundaries = []
     session = _create_retry_session(retries=5, backoff_factor=2.0)
+    cache_dir = Path(boundary_cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
     for country_code in country_codes:
-        max_retries = 3
-        retry_delay = 5  # seconds
-        
-        for attempt in range(max_retries):
+        cache_file = _boundary_cache_path(boundary_cache_dir, country_code)
+        boundary = None
+
+        if cache_file.exists() and not refresh_boundary_cache:
             try:
-                logger.info(f"Processing {country_code}... (attempt {attempt + 1}/{max_retries})")
-                
-                # Use requests.get() approach (works in Docker) instead of gpd.read_file() directly
-                url = f"https://github.com/wmgeolab/geoBoundaries/raw/fcccfab7523d4d5e55dfc7f63c166df918119fd1/releaseData/gbOpen/{country_code}/ADM0/geoBoundaries-{country_code}-ADM0.geojson"
-                
-                resp = session.get(
-                    url, 
-                    headers={"User-Agent": "Mozilla/5.0"}, 
-                    timeout=60,
-                    verify=True
+                boundary = gpd.read_file(cache_file)
+                logger.info(f"Loaded boundary for {country_code} from cache: {cache_file}")
+            except Exception as cache_error:
+                logger.warning(
+                    f"Cached boundary for {country_code} could not be read ({cache_error}); "
+                    "will re-download"
                 )
-                resp.raise_for_status()
-                boundary = gpd.read_file(io.BytesIO(resp.content))
-                
-                # Skip buffer operation - h3ronpy can't handle buffered geometries properly
-                # Keep exact notebook approach: raw boundaries only
-                logger.info(f"Loaded boundary for {country_code} (no buffer applied for h3ronpy compatibility)")
-                
-                # Exact same conversion as notebook
-                boundary_gdf = geodataframe_to_cells(
-                    boundary,
-                    8,  # H3 resolution 8
-                )
-                
-                # Exact same Polars conversion as notebook
-                boundary = pl.DataFrame(boundary_gdf).select("cell")
-                boundary = boundary.lazy()
-                all_boundaries.append(boundary)
-                
-                logger.info(f"Added {len(boundary_gdf)} H3 cells for {country_code}")
-                break  # Success, exit retry loop
-                
-            except (requests.exceptions.SSLError, 
+
+        if boundary is None:
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    logger.info(
+                        f"Downloading boundary for {country_code}... "
+                        f"(attempt {attempt + 1}/{max_retries})"
+                    )
+                    url = (
+                        "https://github.com/wmgeolab/geoBoundaries/raw/"
+                        "fcccfab7523d4d5e55dfc7f63c166df918119fd1/releaseData/gbOpen/"
+                        f"{country_code}/ADM0/geoBoundaries-{country_code}-ADM0.geojson"
+                    )
+                    resp = session.get(
+                        url,
+                        headers={"User-Agent": "Mozilla/5.0"},
+                        timeout=60,
+                        verify=True,
+                    )
+                    resp.raise_for_status()
+                    cache_file.write_bytes(resp.content)
+                    boundary = gpd.read_file(io.BytesIO(resp.content))
+                    logger.info(f"Cached boundary for {country_code} at: {cache_file}")
+                    break
+                except (
+                    requests.exceptions.SSLError,
                     requests.exceptions.ConnectionError,
-                    requests.exceptions.RequestException) as e:
-                if attempt < max_retries - 1:
-                    wait_time = retry_delay * (attempt + 1)
-                    logger.warning(f"Network error for {country_code} (attempt {attempt + 1}/{max_retries}): {e}")
-                    logger.info(f"Retrying in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"Failed to load boundary for {country_code} after {max_retries} attempts: {e}")
-                    logger.error("This may be a DNS/network issue. Check Docker network connectivity.")
-                    # Don't break the loop, continue to next country
-                    continue
-            except Exception as e:
-                logger.error(f"Error processing country {country_code}: {e}")
-                break  # Exit retry loop for non-network errors
+                    requests.exceptions.RequestException,
+                ) as e:
+                    if attempt < max_retries - 1:
+                        wait_time = min(30, 2 ** attempt)
+                        logger.warning(
+                            f"Network error for {country_code} (attempt {attempt + 1}/{max_retries}): {e}"
+                        )
+                        logger.info(f"Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                    else:
+                        logger.error(
+                            f"Failed to load boundary for {country_code} after {max_retries} attempts: {e}"
+                        )
+                        logger.error("This may be a DNS/network issue. Check Docker network connectivity.")
+                except Exception as e:
+                    logger.error(f"Error processing country {country_code}: {e}")
+                    break
+
+        if boundary is None:
+            logger.error(f"Skipping country {country_code} because boundary could not be loaded")
+            continue
+
+        # Skip buffer operation - h3ronpy can't handle buffered geometries properly
+        # Keep exact notebook approach: raw boundaries only
+        logger.info(f"Loaded boundary for {country_code} (no buffer applied for h3ronpy compatibility)")
+
+        boundary_gdf = geodataframe_to_cells(
+            boundary,
+            8,  # H3 resolution 8
+        )
+
+        boundary_frame = pl.DataFrame(boundary_gdf).select("cell").lazy()
+        all_boundaries.append(boundary_frame)
+        logger.info(f"Added {len(boundary_gdf)} H3 cells for {country_code}")
 
     if not all_boundaries:
         raise ValueError("No valid country boundaries found")
@@ -344,6 +382,8 @@ def process_daily_aggregated_data(
     rings: int = 10,
     weight_power: float = 1.5,
     buffer_degrees: float = 0.4,
+    boundary_cache_dir: str = "./data/cache/geoboundaries",
+    refresh_boundary_cache: bool = False,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ) -> None:
@@ -358,6 +398,8 @@ def process_daily_aggregated_data(
         rings: Number of H3 rings for IDW interpolation
         weight_power: Power for inverse distance weighting
         buffer_degrees: Buffer around country boundaries in degrees
+        boundary_cache_dir: Cache directory for boundary GeoJSON files
+        refresh_boundary_cache: Force refresh of cached boundary files
         start_date: Start date filter (YYYY-MM-DD)
         end_date: End date filter (YYYY-MM-DD)
     """
@@ -440,7 +482,12 @@ def process_daily_aggregated_data(
     
     # Create boundary grid once for all files (now with buffer_degrees)
     logger.info("Creating boundary grid...")
-    boundary_grid = create_boundary_grid(countries, buffer_degrees)
+    boundary_grid = create_boundary_grid(
+        countries,
+        buffer_degrees,
+        boundary_cache_dir=boundary_cache_dir,
+        refresh_boundary_cache=refresh_boundary_cache,
+    )
     print(boundary_grid.collect().head())
     
     # Process each file
@@ -492,6 +539,10 @@ def main():
                        help='Power for inverse distance weighting (default: 1.5)')
     parser.add_argument('--buffer-degrees', type=float, default=0.4,
                        help='Buffer around country boundaries in degrees (default: 0.4)')
+    parser.add_argument('--boundary-cache-dir', type=str, default='./data/cache/geoboundaries',
+                       help='Directory for cached country boundary GeoJSON files')
+    parser.add_argument('--refresh-boundary-cache', action='store_true',
+                       help='Force re-download of boundary GeoJSON files even if cache exists')
     parser.add_argument('--start-date', type=str,
                        help='Start date for processing (YYYY-MM-DD)')
     parser.add_argument('--end-date', type=str,
@@ -507,6 +558,10 @@ def main():
     logger.info(f"Countries: {args.countries}")
     logger.info(f"IDW Parameters: rings={args.rings}, weight_power={args.weight_power}")
     logger.info(f"Buffer Degrees: {args.buffer_degrees}")
+    logger.info(
+        f"Boundary cache: {args.boundary_cache_dir} "
+        f"(refresh={'enabled' if args.refresh_boundary_cache else 'disabled'})"
+    )
     
     # Validate date parameters
     if args.start_date or args.end_date:
@@ -521,6 +576,8 @@ def main():
         rings=args.rings,
         weight_power=args.weight_power,
         buffer_degrees=args.buffer_degrees,
+        boundary_cache_dir=args.boundary_cache_dir,
+        refresh_boundary_cache=args.refresh_boundary_cache,
         start_date=args.start_date,
         end_date=args.end_date
     )

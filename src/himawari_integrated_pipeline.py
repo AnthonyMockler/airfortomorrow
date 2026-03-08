@@ -81,6 +81,8 @@ def main():
     # Real-time parameters
     parser.add_argument('--hours', type=int, default=24,
                         help='Number of hours to collect in realtime mode (default: 24)')
+    parser.add_argument('--download-workers', type=int, default=4,
+                        help='Number of worker threads for realtime NetCDF downloads (default: 4)')
     
     # Processing options
     parser.add_argument('--keep-originals', action='store_true',
@@ -146,6 +148,7 @@ def main():
             # Use UTC time for consistency with satellite data timestamps
             cutoff_time = datetime.utcnow() - timedelta(hours=args.hours)
             logger.info(f"Realtime mode: downloading files from the past {args.hours} hours (since {cutoff_time} UTC)")
+            logger.info(f"Realtime download workers: {args.download_workers}")
             logger.info(f"H3 processing: will process ALL downloaded files (no time filtering)")
         else:
             logger.info(f"Date range: {args.start_date} to {args.end_date}")
@@ -233,6 +236,7 @@ def main():
             download_cmd.extend(["--start-date", args.start_date, "--end-date", args.end_date])
         else:
             download_cmd.extend(["--hours", str(args.hours)])
+            download_cmd.extend(["--download-workers", str(args.download_workers)])
         
         download_cmd.extend(["--raw-data-dir", args.raw_data_dir])
         download_cmd.extend(["--tif-dir", args.tif_dir])

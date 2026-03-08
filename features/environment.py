@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,7 @@ class ShellResult:
     updated_data_files: list[str]
     timed_out: bool
     timeout_seconds: Optional[int]
+    elapsed_seconds: float
 
     @property
     def output(self) -> str:
@@ -58,6 +60,7 @@ def _run_shell(context, command: str, timeout: Optional[int] = None) -> ShellRes
     timed_out = False
     timeout_seconds = None
 
+    run_start = time.monotonic()
     try:
         completed = subprocess.run(
             ["bash", "-lc", command],
@@ -80,6 +83,7 @@ def _run_shell(context, command: str, timeout: Optional[int] = None) -> ShellRes
             f"\n[behave] Command timed out after {resolved_timeout}s: {command}\n"
         )
         stderr = f"{stderr}{timeout_message}"
+    elapsed_seconds = time.monotonic() - run_start
 
     log_files_after = _collect_log_files(context.repo_root)
     new_log_files = sorted(
@@ -102,6 +106,7 @@ def _run_shell(context, command: str, timeout: Optional[int] = None) -> ShellRes
         updated_data_files=updated_data_files,
         timed_out=timed_out,
         timeout_seconds=timeout_seconds,
+        elapsed_seconds=elapsed_seconds,
     )
     context.last_result = result
     return result

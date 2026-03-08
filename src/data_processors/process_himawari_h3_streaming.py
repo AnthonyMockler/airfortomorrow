@@ -19,9 +19,7 @@ import rasterio
 from rasterio.mask import mask
 import numpy as np
 import xarray as xr
-from dask import delayed, compute
 from pathlib import Path
-import tempfile
 import shutil
 import re
 from datetime import datetime, timedelta
@@ -123,242 +121,151 @@ def netcdf_to_tif_cache(netcdf_path, cache_dir):
         print(f"Error converting NetCDF to TIF {netcdf_path}: {e}")
         return None
 
+
+def _has_positive_finite_values(values: np.ndarray) -> bool:
+    """Fast validity check for AOD arrays."""
+    return bool(np.any(np.isfinite(values) & (values > 0)))
+
+
+def _handle_early_exit(message: str, netcdf_path: str, keep_netcdf: bool) -> str:
+    """Return a status message and optionally delete the source NetCDF."""
+    if keep_netcdf:
+        return f"{message}: {netcdf_path}"
+
+    try:
+        os.remove(netcdf_path)
+        print(f"Deleted NetCDF file ({message.lower()}): {netcdf_path}")
+        return f"{message}: {netcdf_path} (NetCDF deleted)"
+    except Exception as delete_error:
+        print(f"Warning: Could not delete NetCDF file {netcdf_path}: {delete_error}")
+        return f"{message}: {netcdf_path} (NetCDF delete failed)"
+
 def process_single_file_streaming(netcdf_path, parquet_path, hex_resolution, boundaries_countries, cache_dir, compact=False, keep_netcdf=True):
     """Process a single NetCDF file through the complete pipeline"""
-    
-    # Extract country codes from parquet_path if present
-    # Example: H09_20240330_1600_1HARP031_FLDK.02401_02401_LAO_THA.parquet
-    parquet_filename = os.path.basename(parquet_path)
-    
-    # Check if the file already exists - need to use original path if checking an existing file
+
     if os.path.exists(parquet_path):
         print(f"H3 processed {parquet_path} already exists, skipping...")
         return f"Skipped: {parquet_path}"
 
+    tif_path = None
     try:
-        # Step 1: Convert NetCDF to TIF in cache
         tif_path = netcdf_to_tif_cache(netcdf_path, cache_dir)
         if not tif_path or not os.path.exists(tif_path):
-            # Delete NetCDF file even if conversion failed (if keep_netcdf=False)
+            return _handle_early_exit("NetCDF conversion failed", netcdf_path, keep_netcdf)
+
+        print(f"Processing TIF to H3: {tif_path}")
+        with rasterio.open(tif_path) as src:
+            aod = src.read(1)
+            if not _has_positive_finite_values(aod):
+                print(f"No valid data in {tif_path}, skipping...")
+                return _handle_early_exit("No valid data", netcdf_path, keep_netcdf)
+
+            try:
+                masked_aod, masked_transform = mask(src, boundaries_countries.geometry, crop=True)
+                masked_aod = masked_aod[0]
+            except Exception as e:
+                print(f"Error masking raster {tif_path}: {e}")
+                return _handle_early_exit("Masking error", netcdf_path, keep_netcdf)
+
+        if not _has_positive_finite_values(masked_aod):
+            print(f"No valid data after masking {tif_path}, skipping...")
+            return _handle_early_exit("No valid data after masking", netcdf_path, keep_netcdf)
+
+        try:
+            print(f"Converting to H3 resolution {hex_resolution}...")
+            df_pandas = raster_to_dataframe(
+                in_raster=masked_aod,
+                transform=masked_transform,
+                h3_resolution=hex_resolution,
+                nodata_value=-9999,
+                compact=compact,
+                geo=False,
+            )
+        except Exception as e:
+            print(f"Error converting to H3 {tif_path}: {e}")
+            return _handle_early_exit("H3 conversion error", netcdf_path, keep_netcdf)
+
+        if df_pandas.empty or "cell" not in df_pandas.columns or "value" not in df_pandas.columns:
+            print(f"No valid H3 data for {tif_path}, skipping...")
+            return _handle_early_exit("No valid H3 data", netcdf_path, keep_netcdf)
+
+        try:
+            print("Converting to Polars for fast processing...")
+            df_pandas = df_pandas[["cell", "value"]]
+            valid_mask = (
+                df_pandas["value"].notna()
+                & np.isfinite(df_pandas["value"])
+                & (df_pandas["value"] > 0)
+            )
+            df_pandas = df_pandas.loc[valid_mask]
+            if df_pandas.empty:
+                print(f"No valid data after cleaning {tif_path}, skipping...")
+                return _handle_early_exit("No valid data after cleaning", netcdf_path, keep_netcdf)
+
+            netcdf_filename = os.path.basename(netcdf_path)
+            parts = netcdf_filename.split('_')
+            if len(parts) >= 3:
+                date_part = parts[1]
+                month = date_part[:6]
+                day = date_part[6:8]
+            else:
+                month = "unknown"
+                day = "unknown"
+
+            df_pl = pl.from_pandas(df_pandas, include_index=False).with_columns([
+                pl.col("cell").alias("h3_08"),
+                pl.col("value").alias("aod_value"),
+                pl.lit(netcdf_filename).alias("source_file"),
+                pl.lit(month).alias("month"),
+                pl.lit(day).alias("day"),
+            ]).select([
+                "h3_08", "aod_value", "source_file", "month", "day"
+            ])
+
+            if df_pl.shape[0] == 0:
+                print(f"No valid data after cleaning {tif_path}, skipping...")
+                return _handle_early_exit("No valid data after cleaning", netcdf_path, keep_netcdf)
+        except Exception as e:
+            print(f"Error processing with Polars {tif_path}: {e}")
+            return _handle_early_exit("Polars processing error", netcdf_path, keep_netcdf)
+
+        try:
+            os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
+            df_pl.write_parquet(parquet_path)
+            print(f"H3 processed {parquet_path} successfully! ({df_pl.shape[0]} records)")
+            result = f"Success: {parquet_path} ({df_pl.shape[0]} records)"
             if not keep_netcdf:
                 try:
                     os.remove(netcdf_path)
-                    print(f"Deleted NetCDF file (conversion failed): {netcdf_path}")
-                    return f"NetCDF conversion failed: {netcdf_path} (NetCDF deleted)"
+                    print(f"Deleted NetCDF file to save space: {netcdf_path}")
+                    result += " (NetCDF deleted)"
                 except Exception as e:
                     print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                    return f"NetCDF conversion failed: {netcdf_path} (NetCDF delete failed)"
-            return f"NetCDF conversion failed: {netcdf_path}"
-        
-        try:
-            # Step 2: Process TIF to H3 (same as before)
-            print(f"Processing TIF to H3: {tif_path}")
-            
-            # Open and process raster
-            with rasterio.open(tif_path) as src:
-                # Read the data
-                aod = src.read(1)
-                
-                # Check if data is valid
-                if np.all(np.isnan(aod)) or np.all(aod <= 0):
-                    print(f"No valid data in {tif_path}, skipping...")
-                    # Delete NetCDF file even if no valid data (if keep_netcdf=False)
-                    if not keep_netcdf:
-                        try:
-                            os.remove(netcdf_path)
-                            print(f"Deleted NetCDF file (no valid data): {netcdf_path}")
-                            return f"No valid data: {netcdf_path} (NetCDF deleted)"
-                        except Exception as e:
-                            print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                            return f"No valid data: {netcdf_path} (NetCDF delete failed)"
-                    return f"No valid data: {netcdf_path}"
-                
-                # Clip raster to boundaries
-                try:
-                    masked_aod, masked_transform = mask(src, boundaries_countries.geometry, crop=True)
-                    masked_aod = masked_aod[0]  # Extract first band
-                except Exception as e:
-                    print(f"Error masking raster {tif_path}: {e}")
-                    # Delete NetCDF file even if masking failed (if keep_netcdf=False)
-                    if not keep_netcdf:
-                        try:
-                            os.remove(netcdf_path)
-                            print(f"Deleted NetCDF file (masking error): {netcdf_path}")
-                            return f"Masking error: {netcdf_path} (NetCDF deleted)"
-                        except Exception as e:
-                            print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                            return f"Masking error: {netcdf_path} (NetCDF delete failed)"
-                    return f"Masking error: {netcdf_path}"
-                
-                # Check if masked data is valid
-                if np.all(np.isnan(masked_aod)) or np.all(masked_aod <= 0):
-                    print(f"No valid data after masking {tif_path}, skipping...")
-                    # Delete NetCDF file even if no valid data after masking (if keep_netcdf=False)
-                    if not keep_netcdf:
-                        try:
-                            os.remove(netcdf_path)
-                            print(f"Deleted NetCDF file (no valid data after masking): {netcdf_path}")
-                            return f"No valid data after masking: {netcdf_path} (NetCDF deleted)"
-                        except Exception as e:
-                            print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                            return f"No valid data after masking: {netcdf_path} (NetCDF delete failed)"
-                    return f"No valid data after masking: {netcdf_path}"
+                    result += " (NetCDF delete failed)"
+            return result
+        except Exception as e:
+            print(f"Error saving parquet {parquet_path}: {e}")
+            return _handle_early_exit("Parquet save error", netcdf_path, keep_netcdf)
 
-            # Step 3: Convert raster to H3 using h3ronpy pandas function
-            try:
-                print(f"Converting to H3 resolution {hex_resolution}...")
-                df_pandas = raster_to_dataframe(
-                    in_raster=masked_aod,
-                    transform=masked_transform,
-                    h3_resolution=hex_resolution,
-                    nodata_value=-9999,
-                    compact=compact,
-                    geo=False  # Don't create geometries for faster processing
-                )
-                
-                if df_pandas.empty:
-                    print(f"No valid H3 data for {tif_path}, skipping...")
-                    # Delete NetCDF file even if no valid H3 data (if keep_netcdf=False)
-                    if not keep_netcdf:
-                        try:
-                            os.remove(netcdf_path)
-                            print(f"Deleted NetCDF file (no valid H3 data): {netcdf_path}")
-                            return f"No valid H3 data: {netcdf_path} (NetCDF deleted)"
-                        except Exception as e:
-                            print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                            return f"No valid H3 data: {netcdf_path} (NetCDF delete failed)"
-                    return f"No valid H3 data: {netcdf_path}"
-                    
-            except Exception as e:
-                print(f"Error converting to H3 {tif_path}: {e}")
-                # Delete NetCDF file even if H3 conversion failed (if keep_netcdf=False)
-                if not keep_netcdf:
-                    try:
-                        os.remove(netcdf_path)
-                        print(f"Deleted NetCDF file (H3 conversion error): {netcdf_path}")
-                        return f"H3 conversion error: {netcdf_path} (NetCDF deleted)"
-                    except Exception as e:
-                        print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                        return f"H3 conversion error: {netcdf_path} (NetCDF delete failed)"
-                return f"H3 conversion error: {netcdf_path}"
-
-            # Step 4: Convert to Polars for fast processing
-            try:
-                print("Converting to Polars for fast processing...")
-                df_pl = pl.from_pandas(df_pandas)
-                
-                # Clean and filter data using Polars
-                df_pl = (df_pl
-                    .filter(pl.col("value") > 0)  # Remove zero/negative values
-                    .drop_nulls(subset=["value"])  # Remove null values
-                    .filter(pl.col("value").is_not_nan())  # Remove NaN values
-                )
-                
-                # Add metadata from NetCDF filename
-                netcdf_filename = os.path.basename(netcdf_path)
-                # Extract date/time from filename (adjust pattern as needed)
-                # Example: H09_20240202_0100_1HARP031_FLDK.02401_02401.nc
-                parts = netcdf_filename.split('_')
-                if len(parts) >= 3:
-                    date_part = parts[1]  # 20240202
-                    time_part = parts[2]  # 0100
-                    month = date_part[:6]  # 202402
-                    day = date_part[6:8]  # 02
-                else:
-                    month = "unknown"
-                    day = "unknown"
-                
-                df_pl = df_pl.with_columns([
-                    pl.lit(netcdf_filename).alias("source_file"),
-                    pl.lit(month).alias("month"),
-                    pl.lit(day).alias("day"),
-                    pl.col("cell").alias("h3_08"),  # Rename cell column to h3_08
-                    pl.col("value").alias("aod_value")  # Rename value to aod_value
-                ]).select([
-                    "h3_08", "aod_value", "source_file", "month", "day"
-                ])
-                
-                if df_pl.shape[0] == 0:
-                    print(f"No valid data after cleaning {tif_path}, skipping...")
-                    # Delete NetCDF file even if no valid data after cleaning (if keep_netcdf=False)
-                    if not keep_netcdf:
-                        try:
-                            os.remove(netcdf_path)
-                            print(f"Deleted NetCDF file (no valid data after cleaning): {netcdf_path}")
-                            return f"No valid data after cleaning: {netcdf_path} (NetCDF deleted)"
-                        except Exception as e:
-                            print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                            return f"No valid data after cleaning: {netcdf_path} (NetCDF delete failed)"
-                    return f"No valid data after cleaning: {netcdf_path}"
-
-            except Exception as e:
-                print(f"Error processing with Polars {tif_path}: {e}")
-                # Delete NetCDF file even if Polars processing failed (if keep_netcdf=False)
-                if not keep_netcdf:
-                    try:
-                        os.remove(netcdf_path)
-                        print(f"Deleted NetCDF file (Polars processing error): {netcdf_path}")
-                        return f"Polars processing error: {netcdf_path} (NetCDF deleted)"
-                    except Exception as e:
-                        print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                        return f"Polars processing error: {netcdf_path} (NetCDF delete failed)"
-                return f"Polars processing error: {netcdf_path}"
-
-            # Step 5: Save to Parquet using Polars
-            try:
-                os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
-                df_pl.write_parquet(parquet_path)
-                
-                print(f"H3 processed {parquet_path} successfully! ({df_pl.shape[0]} records)")
-                result = f"Success: {parquet_path} ({df_pl.shape[0]} records)"
-                
-                # Delete NetCDF file after successful H3 processing (if keep_netcdf=False)
-                if not keep_netcdf:
-                    try:
-                        os.remove(netcdf_path)
-                        print(f"Deleted NetCDF file to save space: {netcdf_path}")
-                        result += " (NetCDF deleted)"
-                    except Exception as e:
-                        print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                        result += " (NetCDF delete failed)"
-                
-            except Exception as e:
-                print(f"Error saving parquet {parquet_path}: {e}")
-                # Delete NetCDF file even if parquet save failed (if keep_netcdf=False)
-                if not keep_netcdf:
-                    try:
-                        os.remove(netcdf_path)
-                        print(f"Deleted NetCDF file (parquet save error): {netcdf_path}")
-                        return f"Parquet save error: {netcdf_path} (NetCDF deleted)"
-                    except Exception as e:
-                        print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
-                        return f"Parquet save error: {netcdf_path} (NetCDF delete failed)"
-                return f"Parquet save error: {netcdf_path}"
-        
-        finally:
-            # Step 6: Always clean up TIF file from cache
-            try:
-                if os.path.exists(tif_path):
-                    os.remove(tif_path)
-                    print(f"Cleaned up TIF from cache: {tif_path}")
-            except Exception as e:
-                print(f"Warning: Could not clean up TIF file {tif_path}: {e}")
-        
-        return result
-        
     except Exception as e:
         error_msg = f"Error in streaming pipeline {netcdf_path}: {str(e)}"
         print(error_msg)
-        # Delete NetCDF file even if general error occurred (if keep_netcdf=False)
-        if not keep_netcdf:
-            try:
-                os.remove(netcdf_path)
-                print(f"Deleted NetCDF file (general error): {netcdf_path}")
-                return f"{error_msg} (NetCDF deleted)"
-            except Exception as delete_e:
-                print(f"Warning: Could not delete NetCDF file {netcdf_path}: {delete_e}")
-                return f"{error_msg} (NetCDF delete failed)"
-        return error_msg
+        if keep_netcdf:
+            return error_msg
+        try:
+            os.remove(netcdf_path)
+            print(f"Deleted NetCDF file (general error): {netcdf_path}")
+            return f"{error_msg} (NetCDF deleted)"
+        except Exception as delete_e:
+            print(f"Warning: Could not delete NetCDF file {netcdf_path}: {delete_e}")
+            return f"{error_msg} (NetCDF delete failed)"
+    finally:
+        try:
+            if tif_path and os.path.exists(tif_path):
+                os.remove(tif_path)
+                print(f"Cleaned up TIF from cache: {tif_path}")
+        except Exception as e:
+            print(f"Warning: Could not clean up TIF file {tif_path}: {e}")
 
 def check_interpolated_file_exists(date_str, countries, mode='historical'):
     """Check if interpolated file already exists for the given date"""
@@ -615,13 +522,12 @@ def main():
     print(f"Processing {len(all_netcdf_files)} files sequentially...")
     
     results = []
+    countries_str = "_".join(sorted_country_codes)
     
     for i, (netcdf, parquet) in enumerate(all_netcdf_files):
         print(f"Processing file {i+1}/{len(all_netcdf_files)}: {os.path.basename(netcdf)}")
         
         # Update parquet path to include country codes (sorted alphabetically)
-        sorted_country_codes = sorted(country_codes)
-        countries_str = "_".join(sorted_country_codes)
         parquet_dir = os.path.dirname(parquet)
         parquet_filename = os.path.basename(parquet)
         parquet_base, parquet_ext = os.path.splitext(parquet_filename)
@@ -681,7 +587,7 @@ def main():
             print(f"Warning: Could not clean up cache directory: {e}")
                     
     except Exception as e:
-        print(f"Error during parallel processing: {e}")
+        print(f"Error during streaming processing: {e}")
 
 def test_single_file():
     """Test streaming processing with a single file"""
