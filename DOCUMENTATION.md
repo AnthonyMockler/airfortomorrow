@@ -2,7 +2,7 @@
 
 **A product of UNICEF EAPRO's Frontier Data Lab.**
 
-Technical reference for the Air for tomorrow pipeline, including workflows and configuration options.
+Technical reference for the Air for Tomorrow pipeline, including workflows and configuration options.
 
 ---
 
