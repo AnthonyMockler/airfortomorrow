@@ -109,6 +109,7 @@ Deliverables:
 
 Proposed docs structure:
 
+- `docs/README.md`
 - `docs/REPO_MAP.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DATAFLOW.md`
@@ -442,6 +443,8 @@ Target GREEN states for implementation:
   - User approved proceeding in phased implementation order rather than attempting the full harness rollout at once.
   - Phase 0 and Phase 1 were selected as the first implementation slice.
   - Separate commits are required for Phase 0 and Phase 1 so the repo can roll back either slice independently if the new workflow proves too noisy or too rigid.
+  - Phase 1 introduced a `docs/` landing page plus focused durable knowledge files for repo map, architecture, data flow, workflow rules, test harness usage, source contracts, reliability, and harness adoption context.
+  - Root `AGENTS.md` was reduced from 167 lines to 72 lines and now acts as a short operating map rather than the full instruction manual.
 
 ## Risks and Mitigations
 
