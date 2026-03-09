@@ -144,22 +144,22 @@ Run each pipeline individually to better monitor progress and handle errors:
 
 ```bash
 # 1. Collect air quality data
-./scripts/run_air_quality_integrated_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-31 --countries THA LAO
+./scripts/run_air_quality_integrated_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-30 --countries THA LAO
 
 # 2. Collect meteorological data
-./scripts/run_era5_idw_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-31 --countries THA LAO
+./scripts/run_era5_idw_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-30 --countries THA LAO
 
 # 3. Process fire detection data
-./scripts/run_firms_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-31 --countries THA LAO
+./scripts/run_firms_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-30 --countries THA LAO
 
 # 4. Process satellite AOD data - for period of times > 6months, it's recommended to run each step of this pipeline separately - check the himawari section for more details
-./scripts/run_himawari_integrated_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-31 --countries THA LAO
+./scripts/run_himawari_integrated_pipeline.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-30 --countries THA LAO
 
 # 5. Generate silver dataset
-./scripts/make_silver.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-31 --countries THA LAO
+./scripts/make_silver.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-30 --countries THA LAO
 
 # 6. Generate predictions and maps
-./scripts/predict_air_quality.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-31 --countries THA LAO --generate-map
+./scripts/predict_air_quality.sh --mode historical --start-date 2023-01-01 --end-date 2023-06-30 --countries THA LAO --generate-map
 ```
 
 **Why separate for historical?**
@@ -525,7 +525,7 @@ ERA5 data comes on a coarse grid (0.25°) and is interpolated to the finer H3 gr
 - **Algorithm**: Inverse Distance Weighting for spatial interpolation
 - **Rings**: 10 rings for interpolation (configurable with `--idw-rings`)
 - **Weight Power**: 1.5 for distance weighting (configurable with `--idw-weight-power`)
-- **Output**: H3 resolution 8 hexagons (~665m² per cell)
+- **Output**: H3 resolution 8 hexagons (~0.74 km² per cell)
 
 #### Processing Modes
 
@@ -590,7 +590,7 @@ The ERA5 pipeline uses **three different data sources** depending on the time pe
 
 #### Separate processing steps 
 
-You can also run each step of the ERA5 pipeline independently - TO DO :
+You can also run each step of the ERA5 pipeline independently:
 
 ```bash
 - run_era5_realtime.sh
@@ -820,7 +820,7 @@ The Air Quality Prediction System uses an XGBoost regression model to predict PM
 - **Target**: PM2.5 concentration (μg/m³) - log-transformed during training
 - **Features**: 21 features (8 base + 1 spatial context + 12 rolling averages)
 - **Model File**: `src/models/xgboost_model.json`
-- **Training Period**: 01/01/2022 to 30/09/2025
+- **Training Period**: 2021-12-31 to 2024-12-31
 - **Prediction Output**: Exponentiated log predictions, clipped to 0-500 μg/m³
 
 ### Air Quality Categories
@@ -847,7 +847,7 @@ The Docker container includes all required system dependencies:
 - **OpenMP**: Runtime library for XGBoost parallel processing
 - **jq**: JSON processor for configuration parsing
 - **yq**: YAML processor for reading configuration files
-- **Python 3.11**: Runtime environment with all packages from requirements.txt
+- **Python 3.10**: Runtime environment with all packages from requirements.txt
 
 ### Container Entrypoint
 
