@@ -189,7 +189,7 @@ airfortomorrow/
 
 ## 🌟 **Key Features**
 
-### **🔧 Production-Ready System**
+### **🔧 Operational Pipeline Features**
 - ✅ **Complete automation** from data collection to predictions
 - ✅ **Real-time and historical** processing modes
 - ✅ **Comprehensive logging** and progress tracking
@@ -197,7 +197,7 @@ airfortomorrow/
 
 ### **🔗 Advanced Data Integration**
 - ✅ **Multi-source fusion**: Satellite AOD, fire, weather, ground sensors
-- ✅ **Intelligent fallbacks**: System continues when data sources are unavailable
+- ✅ **Fallback handling**: The pipeline can continue when some data sources are unavailable
 
 ### **🗺️ Enhanced Visualization**
 - ✅ **AQI maps** with H3 hexagonal visualization
@@ -207,7 +207,7 @@ airfortomorrow/
 ### **💾 Storage Management**
 - **Automatic Cleanup**: AOD NetCDF files deleted after H3 processing (configurable)
 - **Cache-Based Processing**: AOD Temporary TIF files in cache, auto-deleted
-- **Smart Skipping**: Skip existing files to avoid reprocessing
+- **Existing-output checks**: The pipeline skips files that are already present
 - **Mode-Based Organization**: `/realtime/` and `/historical/` subdirectories
 
 ### **📦 Git LFS For Large Data**
@@ -281,7 +281,7 @@ Detailed workflow documentation:
 
 ### **XGBoost Prediction System**
 
-The Air Quality Prediction System uses machine learning to predict PM2.5 concentrations based on the silver datasets with optional high-quality map visualizations.
+Air for tomorrow uses machine learning to predict PM2.5 concentrations based on the silver datasets with optional high-quality map visualizations.
 
 ### **Model Input Features**
 
@@ -300,7 +300,7 @@ The Air Quality Prediction System uses machine learning to predict PM2.5 concent
 
 **Details on enhanced features:**
 - **Rolling Averages**: The model uses 3-day and 7-day rolling averages for all time-series features (AOD, fire intensity, temperature, wind, dewpoint), capturing temporal trends
-- **Spatial Context**: We wanted to include a signal from the previous day's air quality in the model. Because direct measures are only available where sensors exist, using hexagonal H3 resolution 8 for previous-day PM2.5 would leave many gaps. To reduce this issue, we use a coarser resolution and calculate the previous-day average PM2.5 concentration on an H3 resolution 4 cell (~1,770 km²), versus resolution 8 (~0.74 km²) for prediction. This provides broader previous-day PM2.5 coverage across most of each country.
+- **Spatial Context**: The model includes a previous-day air quality context feature. Because direct measures are only available where sensors exist, using hexagonal H3 resolution 8 for previous-day PM2.5 would leave many gaps. To reduce this issue, we use a coarser resolution and calculate the previous-day average PM2.5 concentration on an H3 resolution 4 cell (~1,770 km²), versus resolution 8 (~0.74 km²) for prediction. This provides broader previous-day PM2.5 coverage across most of each country.
 
 
 📚 **[Complete Model Features (21 total)](DOCUMENTATION.md#model-features-21-total)**

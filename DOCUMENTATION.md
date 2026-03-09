@@ -2,7 +2,7 @@
 
 **A product of UNICEF EAPRO's Frontier Data Lab.**
 
-Complete technical reference for the Air Quality Prediction System pipeline, including detailed workflows, configuration options, and advanced features.
+Technical reference for the Air for tomorrow pipeline, including workflows and configuration options.
 
 ---
 
@@ -174,7 +174,7 @@ Run each pipeline individually to better monitor progress and handle errors:
 
 ### 1. Air Quality Data
 
-**Integrated Pipeline** - Collects and processes data from both OpenAQ and AirGradient sensors in one command.
+**Integrated pipeline** - Collects and processes data from both OpenAQ and AirGradient sensors in one command.
 
 #### Basic Usage
 
@@ -201,7 +201,7 @@ H3-indexed parquet files ready for silver dataset generation:
 
 #### Key Features
 
-- **Smart Deduplication**: Prevents double-counting when sensors overlap (within 500m radius)
+- **Deduplication**: Prevents double-counting when sensors overlap (within 500m radius)
 - **Multi-source Integration**: Combines two complementary networks
 - **Quality Control**: Configurable thresholds and validation
 - **Source Tracking**: Maintains `pm25_source` field (openaq/airgradient)
@@ -742,7 +742,7 @@ Uses pre-trained XGBoost model to predict PM2.5 concentrations from silver datas
 
 #### Missing Value Handling
 
-The model handles missing data intelligently:
+Missing values are handled as follows:
 - **Fire features**: Fill with 0.0 (no fires)
 - **Weather features**: Fill with column mean
 - **Population**: Fill with 0.0
