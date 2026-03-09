@@ -304,7 +304,7 @@ Model examination and SHAP analysis in the exploration workflow showed patterns 
 - Month contributes seasonal baseline information.
 - WorldPop population helps capture structural spatial differences.
 
-Interpretability techniques such as SHAP can provide additional instance-level explanations and are recommended for future work, especially when scaling to additional regions.
+Interpretability methods such as SHAP may be useful in future work, particularly if the approach is extended to additional regions.
 
 ## Technical Specifications
 
@@ -340,7 +340,7 @@ Recommended for production inference:
 
 - Core libraries: XGBoost, NumPy, Polars, h3-py, GDAL, rasterio, SciPy.
 - Environment management: Docker setup with YAML-driven configuration via `config/config.yaml`.
-- Cross-platform note: Optimized for Linux/Docker; can run on macOS/Windows with dependency parity.
+- Cross-platform note: The maintained runtime environment is Linux via Docker. macOS and Windows may work if dependency versions are matched.
 
 ## Citation
 
