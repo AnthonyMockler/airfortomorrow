@@ -1,0 +1,17 @@
+{
+  "source_file": {
+    "month": "202501",
+    "day": "03",
+    "filename": "H09_20250103_0900_1HARP031_FLDK.02401_02401.nc"
+  },
+  "countries": ["THA"],
+  "selection_reason": "Chosen from current THA historical outputs because it produces a dense non-degenerate H3 result with high coverage and healthy value spread, unlike sparse scenes with materially fewer populated H3 cells.",
+  "expected_output": {
+    "rows": 417964,
+    "unique_h3": 417964,
+    "aod_min": 0.0421999990940094,
+    "aod_max": 0.6833999752998352,
+    "aod_mean": 0.25000326144589724,
+    "aod_std": 0.09620758891105652
+  }
+}
