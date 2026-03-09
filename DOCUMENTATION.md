@@ -880,7 +880,7 @@ For development:
 
 ## Project Structure
 
-Use the high-level project map in `README.md` for the current repository layout. The detailed file inventory was removed from this document because it drifted out of date and was duplicating information maintained elsewhere.
+Use the high-level project map in `README.md` for the current repository layout.
 
 ### Key Notes
 
