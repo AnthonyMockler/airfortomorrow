@@ -1,6 +1,6 @@
 # Model Card for Air Quality PM2.5 Prediction Model (Laos and Thailand)
 
-A machine learning model (XGBoost regressor) to nowcast fine particulate matter (PM2.5) across Laos and Thailand for the next 24 hours using near-realtime satellite and auxiliary data sources.
+A machine learning model (XGBoost regressor) to nearcast fine particulate matter (PM2.5) across Laos and Thailand for the next 24 hours using near-realtime satellite and auxiliary data sources.
 
 This model integrates multi-source data including:
 
@@ -9,7 +9,7 @@ This model integrates multi-source data including:
 - Realtime meteorological data (temperature, dewpoint, wind speed and direction) from ERA5
 - Low-cost and reference-grade ground-based PM2.5 sensors (AirGradient, OpenAQ)
 
-The model is designed for operational use, producing daily PM2.5 nearcasts at approximately 0.66 km² resolution (H3 hexagonal grid) across Thailand and Lao PDR. It is intended to support air-quality estimation in areas with few or no ground monitoring stations, enabling governments, UNICEF country offices, and partners to anticipate pollution events and inform preventative public-health measures.
+The model is designed for operational use, producing daily PM2.5 nearcasts at approximately 0.74 km² resolution (H3 hexagonal grid) across Thailand and Lao PDR. It is intended to support air-quality estimation in areas with few or no ground monitoring stations, enabling governments, UNICEF country offices, and partners to anticipate pollution events and inform preventative public-health measures.
 
 ---
 
@@ -19,7 +19,7 @@ The model is designed for operational use, producing daily PM2.5 nearcasts at ap
 
 The Air Quality PM2.5 Prediction Model is an extreme gradient-boosted decision tree regression model (XGBoost) that forms the core of an end-to-end air-quality estimation pipeline. The model predicts daily average surface-level PM2.5 concentrations (µg/m³) using features derived from satellite remote sensing, meteorology, fire activity, population density, and temporal/spatial context features.
 
-Predictions are produced on an H3 resolution-8 grid (approximately 0.665 km² hexagons) covering all of Lao PDR and Thailand, with the design extensible to neighboring Southeast Asian countries given similar data availability.
+Predictions are produced on an H3 resolution-8 grid (approximately 0.74 km² hexagons) covering all of Lao PDR and Thailand, with the design extensible to neighboring Southeast Asian countries given similar data availability.
 
 Key characteristics include:
 
@@ -67,7 +67,7 @@ This model should not be used for purposes or settings for which it was not desi
 
 - Outside Southeast Asia: The model is trained specifically on Laos and Thailand data and is likely not suitable for other regions without retraining.
 - Other pollutants or indoor air: The model only predicts outdoor PM2.5 concentrations and does not estimate other pollutants or indoor air quality.
-- Long-term forecasting: The model provides daily nowcasts and short-range forecasts; it is not a time-series forecaster for weeks or months ahead.
+- Long-term forecasting: The model provides daily nearcasts and short-range forecasts; it is not a time-series forecaster for weeks or months ahead.
 - Regulatory enforcement: Estimates are not legally authoritative and should not be used as the sole basis for regulatory compliance or punitive measures.
 - Medical or individual advice: Predictions are community-level estimates and should not drive individual medical decisions without supporting local data or official advisories.
 
@@ -156,6 +156,8 @@ For custom integrations, replicate repository feature engineering exactly (espec
 ### Training Data
 
 The model was trained on a combined dataset that merges all relevant data sources for Laos and Thailand over a multi-year historical period. Each training example corresponds to a specific location (H3 cell at resolution 8) and date with the following inputs and target:
+
+The canonical inventory for external datasets, source links, and licensing terms is maintained in [EXTERNAL_DATASETS_AND_LICENSES.md](EXTERNAL_DATASETS_AND_LICENSES.md).
 
 - Target variable: Daily average PM2.5 concentration (µg/m³) from ground monitors (OpenAQ and AirGradient).
 - Satellite AOD (Himawari-8): Hourly daylight aerosol optical depth aggregated to daily means per H3 cell, with interpolation for cloud-related gaps.
@@ -366,7 +368,7 @@ UNICEF East Asia and Pacific Frontier Data Lab, & UNICEF Lao PDR. (2025). *Air Q
 
 - PM2.5: Particulate matter with diameter less than or equal to 2.5 micrometers, measured in µg/m³.
 - AOD (Aerosol Optical Depth): A dimensionless measure of how much light airborne particles block through the atmosphere; correlated with surface PM2.5.
-- H3 grid: Hexagonal geospatial indexing system developed by Uber; each resolution-8 cell covers roughly 0.665 km².
+- H3 grid: Hexagonal geospatial indexing system developed by Uber; each resolution-8 cell covers roughly 0.74 km².
 - Inverse distance weighting (IDW): Interpolation method weighting nearby observations inversely to their distance; used to fill satellite and weather data gaps.
 - Kernel density estimation (KDE): Technique to convert discrete events (for example, fire detections) into continuous density surfaces.
 - OpenAQ: Open data platform aggregating government and research air quality measurements worldwide.
