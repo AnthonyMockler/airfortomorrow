@@ -1,4 +1,4 @@
-# 🌏 AIr for Tomorrow
+# 🌏 Air for Tomorrow
 
 [![CI](https://github.com/unicef/airfortomorrow/actions/workflows/tests.yml/badge.svg)](https://github.com/unicef/airfortomorrow/actions/workflows/tests.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
