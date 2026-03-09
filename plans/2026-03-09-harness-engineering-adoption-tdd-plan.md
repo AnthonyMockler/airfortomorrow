@@ -5,7 +5,7 @@
 - Active Agent: Codex (GPT-5)
 - Started: 2026-03-09
 - Last Updated: 2026-03-09
-- Scope Note: Convert the repo's existing plan-driven and Behave-based workflow into a more explicit harness-engineering system with short repo maps, durable in-repo knowledge, mechanical enforcement, agent-readable validation artifacts, and scheduled cleanup. The currently approved implementation slice is limited to Phase 0 and Phase 1.
+- Scope Note: Convert the repo's existing plan-driven and Behave-based workflow into a more explicit harness-engineering system with short repo maps, durable in-repo knowledge, mechanical enforcement, agent-readable validation artifacts, and scheduled cleanup. The current approved implementation slice covers Phase 0, Phase 1, and a docs-only Phase 1.5 refinement pass.
 
 ## Feature Goal
 
@@ -445,6 +445,19 @@ Target GREEN states for implementation:
   - Separate commits are required for Phase 0 and Phase 1 so the repo can roll back either slice independently if the new workflow proves too noisy or too rigid.
   - Phase 1 introduced a `docs/` landing page plus focused durable knowledge files for repo map, architecture, data flow, workflow rules, test harness usage, source contracts, reliability, and harness adoption context.
   - Root `AGENTS.md` was reduced from 167 lines to 72 lines and now acts as a short operating map rather than the full instruction manual.
+  - Review after Phase 1 found the new docs were directionally correct but over-weighted toward workflow and test discipline relative to the repository's actual system purpose, code layout, and data pipelines.
+  - Docs-only Phase 1.5 was approved to rebalance the knowledge base before Phase 2 guardrails begin.
+  - Specific refinement targets for Phase 1.5:
+    - add a clearer statement of repository purpose and outputs that matter
+    - make `ARCHITECTURE.md` and `DATAFLOW.md` point to concrete code entrypoints and ownership zones
+    - rewrite `SOURCE_CONTRACTS.md` to explain source behavior first and test strategy second
+    - soften Behave-first wording so it is the default for workflow behavior rather than all executable changes
+  - Phase 1.5 results:
+    - root `AGENTS.md` now includes repository purpose, outputs that matter, and key code entrypoints
+    - `ARCHITECTURE.md` now describes the main execution path and concrete ownership zones in the codebase
+    - `DATAFLOW.md` now explains how source processing, silver generation, and prediction fit together
+    - `SOURCE_CONTRACTS.md` now emphasizes source role, code ownership, outputs, and failure modes before test notes
+    - `TEST_HARNESS.md` and `WORKFLOW_RULES.md` now distinguish Behave-first workflow contracts from narrower pytest-first logic changes
 
 ## Risks and Mitigations
 

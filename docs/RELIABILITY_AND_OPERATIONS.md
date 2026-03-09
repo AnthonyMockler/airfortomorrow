@@ -1,5 +1,12 @@
 # Reliability and Operations
 
+## Operational Prerequisites
+
+- Git LFS is required for tracked model and bootstrap data artifacts.
+- Docker is the expected execution environment for tests and routine local runs.
+- Credentials in `.env` are required for at least Himawari, OpenAQ, and ERA5/CDS-backed workflows.
+- Historical FIRMS workflows depend on the tracked archive under `data/raw/firms/historical/`.
+
 ## Logs and Evidence
 
 - Wrapper commands should print or reference the log file for the current run.
@@ -12,6 +19,8 @@
 - stale files in `data/` can make weak artifact assertions pass
 - external credentials and rate limits can break `@live` scenarios independently of code quality
 - long-running historical slices can be too expensive for routine iteration if they are not tightly bounded
+- larger historical OpenAQ runs and Himawari collection paths can dominate runtime even when the requested date slice looks small
+- missing LFS bootstrap inputs can break historical workflows before code-level logic even runs
 
 ## Current Mitigations
 
@@ -22,6 +31,7 @@
 
 ## Troubleshooting Checklist
 
+- confirm Docker, LFS, and required credentials are present before debugging code
 - confirm the wrapper command, mode, dates, and countries match the intended slice
 - inspect the current-run log file before assuming a top-level success message is trustworthy
 - verify the artifact was created or updated by the current command

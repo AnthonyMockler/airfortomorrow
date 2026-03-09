@@ -12,6 +12,9 @@ This repo is adopting a more explicit harness-engineering workflow so that human
 - Phase 1:
   - root `AGENTS.md` became a short operating map
   - durable repository knowledge moved into focused files under `docs/`
+- Phase 1.5:
+  - rebalanced the docs toward repository purpose, concrete code ownership, and pipeline behavior
+  - softened over-broad Behave-first wording so workflow contracts and narrower Python logic are documented differently
 
 ## Planned Later Phases
 

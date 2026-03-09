@@ -9,15 +9,17 @@
 - Create a short decision note in `decisions/` for executable behavior or workflow changes.
 - Use the plan as the running record for commands, failures, decisions, and verification evidence.
 
-## Behave-First Workflow
+## Test-First Workflow
 
-For executable behavior changes:
+For workflow, CLI, and contract behavior changes:
 
 1. Document the change in the plan and decision note.
 2. Write or update the Behave scenario first.
 3. Run the smallest targeted slice and capture the RED failure.
 4. Implement the minimum change that turns the scenario green.
 5. Re-run the targeted slice and relevant regression coverage.
+
+For narrower implementation changes with a clear function or module seam, start with `./scripts/run_tests.sh` and add or update Behave only if the user-visible workflow contract changed.
 
 Docs-only changes can skip Behave if they do not change executable behavior.
 

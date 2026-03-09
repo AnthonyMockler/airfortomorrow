@@ -25,6 +25,8 @@
 
 - Prefer the compact Behave shim unless full raw output is explicitly needed.
 - Do not run pytest directly on the host; use `./scripts/run_tests.sh`.
+- Use Behave for wrapper, CLI, documentation-contract, and workflow behavior.
+- Use pytest first for narrower Python logic when a stable function-level seam exists and no user-facing workflow contract changed.
 - Keep scenarios atomic so failures isolate to one responsibility.
 - Reuse shared command-running helpers from `features/environment.py` and the existing step libraries.
 

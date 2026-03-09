@@ -6,6 +6,7 @@ Use `AGENTS.md` for the short operating map. Use the docs here when you need det
 
 ## Start Here
 
+- Need the product and system purpose first: `../README.md`, then `DATAFLOW.md`
 - Need the top-level shape of the repo: `REPO_MAP.md`
 - Need architecture and configuration rules: `ARCHITECTURE.md`
 - Need the pipeline flow and artifact layout: `DATAFLOW.md`

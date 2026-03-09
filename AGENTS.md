@@ -2,6 +2,16 @@
 
 Air for Tomorrow is an end-to-end air quality prediction pipeline. It combines ground sensors (OpenAQ, AirGradient), fire detections (NASA FIRMS), AOD (Himawari), and meteorology (ERA5) to predict PM2.5 on an H3 grid with XGBoost.
 
+## Purpose and Outputs
+
+- Operational goal: produce daily PM2.5 estimates for Thailand and Laos, especially where ground sensors are sparse.
+- System shape: collect and process source data, harmonize everything onto H3, build a silver feature table, then run XGBoost inference.
+- Outputs that matter:
+  - processed source parquet files under `data/processed/`
+  - silver feature datasets under `data/silver/`
+  - prediction parquet files under `data/predictions/data/`
+  - optional maps and validation artifacts under `data/predictions/`
+
 ## Start Here
 
 - Use the shell wrappers in `scripts/` for execution. Start at `./scripts/run_complete_pipeline.sh`.
@@ -20,13 +30,15 @@ Air for Tomorrow is an end-to-end air quality prediction pipeline. It combines g
 - `data/`: raw, processed, silver, and prediction artifacts.
 - `plans/`: active work records and verification evidence.
 - `decisions/`: short decision notes for scoped workflow or behavior changes.
+- key code entrypoints: `src/run_complete_pipeline.py`, `src/make_silver.py`, `src/predict_air_quality.py`
 
 ## Mandatory Rules
 
 - Use wrapper scripts in `scripts/` rather than calling `src/` modules directly.
 - Use `ConfigLoader` in Python and `scripts/utils/config_reader.sh` in Bash for configuration access.
 - For executable workflow changes, create or claim a plan in `plans/` and create a decision note in `decisions/`.
-- For workflow behavior changes, write or update Behave coverage first and capture the expected RED failure before implementation.
+- For workflow, CLI, or contract changes, write or update Behave coverage first and capture the expected RED failure before implementation.
+- For narrower Python logic changes, use `./scripts/run_tests.sh` when a focused pytest path is the better fit.
 - Documentation-only changes can skip Behave only when they do not change executable behavior.
 - Prefer `./scripts/run_behave_tests_compact.sh` for routine agent-driven Behave runs.
 - Use `./scripts/run_behave_tests.sh` only when full raw output is explicitly needed or when debugging the compact wrapper.
@@ -58,6 +70,10 @@ Air for Tomorrow is an end-to-end air quality prediction pipeline. It combines g
 
 ## Fast Path By Task
 
+- Need to understand what the repo actually does:
+  - read `README.md`
+  - read `docs/DATAFLOW.md`
+  - read `docs/ARCHITECTURE.md`
 - New behavior or bug fix:
   - read `docs/WORKFLOW_RULES.md`
   - read `docs/TEST_HARNESS.md`
