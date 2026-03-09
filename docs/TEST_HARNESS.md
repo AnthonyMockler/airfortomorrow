@@ -32,9 +32,12 @@
 
 ## Long-Running Runs
 
-- For commands expected to run more than 10 minutes, start the command once and wait for completion before checking again.
+- For performance, soak, load, `@slow`, or other commands expected to run more than 10 minutes, start the command once and record the command, start time, and log path before moving on.
+- For long-running Behave runs, use `./scripts/run_behave_tests_compact.sh --long-run ...` when you know the run will be slow. The compact shim also enables this guidance automatically when forwarded Behave args include `@slow`.
+- Do not poll, tail, or send status updates more often than every 5 to 10 minutes unless the run exits, fails, materially changes state, or the user asked for tighter updates.
+- Prefer one delayed check over repeated short-interval checks. Token-efficient waiting is the default for long-running test work.
 - Prefer compact output so the result stays readable.
-- Do not spam interim polling unless the run fails, materially changes state, or the user asked for frequent updates.
+- When a wrapper supports detached execution or durable logs, use that path so the run can complete without repeated terminal interaction.
 
 ## Evidence Expectations
 

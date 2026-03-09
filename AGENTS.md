@@ -43,6 +43,8 @@ Air for Tomorrow is an end-to-end air quality prediction pipeline. It combines g
 - Prefer `./scripts/run_behave_tests_compact.sh` for routine agent-driven Behave runs.
 - Use `./scripts/run_behave_tests.sh` only when full raw output is explicitly needed or when debugging the compact wrapper.
 - Use `./scripts/run_tests.sh` for pytest. Do not run pytest directly on the host.
+- For performance, soak, load, `@slow`, or other runs expected to exceed 10 minutes, start the command once, record the log path, and do not poll, tail, or send status updates more often than every 5 to 10 minutes unless the run exits, fails, materially changes state, or the user asked for tighter updates.
+- For long-running Behave work, prefer `./scripts/run_behave_tests_compact.sh --long-run ...`. The compact shim also auto-enables the same delayed-check guidance when forwarded Behave args include `@slow`.
 - Do not let tests pass on stale artifacts from older runs.
 - Invalid mode-specific flags or options must fail explicitly.
 - Push to `origin` only. Never push to `upstream`.

@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -34,6 +34,7 @@ KEY_FAILURE_PATTERNS = [
 ]
 GEMINI_INPUT_CHAR_LIMIT = 8000
 GEMINI_TIMEOUT_SECONDS = 30
+LONG_RUN_CHECK_MINUTES = 10
 
 
 def parse_args() -> tuple[argparse.Namespace, list[str]]:
@@ -79,6 +80,14 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
         type=int,
         default=60,
         help="Number of fallback lines to keep when no failure block is detected.",
+    )
+    parser.add_argument(
+        "--long-run",
+        action="store_true",
+        help=(
+            "Announce delayed-check guidance before starting the run. "
+            "Enabled automatically for forwarded args containing @slow."
+        ),
     )
     parser.add_argument(
         "--no-compact-defaults",
@@ -141,6 +150,25 @@ def build_command(
     command.extend(compact_args)
     command.extend(behave_args)
     return command
+
+
+def normalize_forwarded_behave_args(behave_args: list[str]) -> list[str]:
+    if behave_args and behave_args[0] == "--":
+        return behave_args[1:]
+    return behave_args
+
+
+def should_enable_long_run_mode(
+    args: argparse.Namespace,
+    behave_args: list[str],
+) -> tuple[bool, str | None]:
+    if args.long_run:
+        return True, "explicit --long-run"
+
+    if any("@slow" in item for item in behave_args):
+        return True, "detected @slow in forwarded Behave args"
+
+    return False, None
 
 
 def strip_ansi(text: str) -> str:
@@ -405,11 +433,37 @@ def print_summary(
     print(f"Raw log: {raw_log_path}")
 
 
+def print_long_run_preamble(raw_log_path: Path, reason: str) -> None:
+    now = datetime.now().astimezone()
+    next_check = now + timedelta(minutes=LONG_RUN_CHECK_MINUTES)
+    tz_name = now.tzname() or "local"
+
+    print(f"Long-run mode: enabled ({reason})", flush=True)
+    print(
+        "Polling cadence: no more often than every 5 to 10 minutes unless the run exits, fails, or materially changes state.",
+        flush=True,
+    )
+    print(f"Started at: {now.strftime('%Y-%m-%d %H:%M:%S')} {tz_name}", flush=True)
+    print(
+        f"Next check after: {next_check.strftime('%Y-%m-%d %H:%M:%S')} {tz_name}",
+        flush=True,
+    )
+    print(f"Raw log: {raw_log_path}", flush=True)
+
+
 def main() -> int:
     args, behave_args = parse_args()
+    behave_args = normalize_forwarded_behave_args(behave_args)
     repo = resolve_repo(args.repo)
     raw_log_path = build_raw_log_path(args.raw_log)
     command = build_command(repo, args, behave_args)
+    long_run_mode, long_run_reason = should_enable_long_run_mode(args, behave_args)
+
+    if long_run_mode:
+        print_long_run_preamble(
+            raw_log_path,
+            long_run_reason or "long-running Behave invocation",
+        )
 
     with raw_log_path.open("w", encoding="utf-8") as handle:
         completed = subprocess.run(

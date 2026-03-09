@@ -23,6 +23,8 @@ Repository tests use **Behave BDD** as the preferred style for workflow and cont
   - `./scripts/run_behave_tests.sh` only when full raw output is explicitly needed or when debugging the compact wrapper
 - Avoid host execution unless debugging locally with explicit opt-in.
 - Default Behave execution should exclude `@slow` and `@live`.
+- For performance, soak, load, `@slow`, or other runs expected to exceed 10 minutes, start the command once, record the log path, and avoid polling, tailing, or status updates more often than every 5 to 10 minutes unless the run exits, fails, materially changes state, or the user asked for tighter updates.
+- When a Behave run is expected to be long, prefer `./scripts/run_behave_tests_compact.sh --long-run ...`. The compact shim also auto-enables the same guidance when forwarded Behave args include `@slow`.
 
 ## AUTHORING GUIDELINES
 - Keep scenarios atomic so failures isolate to one workflow responsibility.
