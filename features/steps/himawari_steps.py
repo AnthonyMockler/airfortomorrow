@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from behave import given, then
 HIMAWARI_H3_REALTIME_PREFIX = "data/processed/himawari/h3/realtime/"
 HIMAWARI_DAILY_REALTIME_PREFIX = "data/processed/himawari/daily_aggregated/realtime/daily_h3_aod_"
 HIMAWARI_INTERP_REALTIME_PREFIX = "data/processed/himawari/interpolated/realtime/interpolated_h3_aod_"
+HIMAWARI_RAW_PREFIX = "data/raw/himawari/"
 
 
 def _require_last_result(context):
@@ -29,6 +31,20 @@ def _resolve_updated_parquets(context, prefix: str) -> list[Path]:
         if not rel_path.startswith(prefix):
             continue
         if not rel_path.endswith(".parquet"):
+            continue
+        abs_path = context.repo_root / rel_path
+        if abs_path.exists() and abs_path.is_file():
+            matches.append(abs_path)
+    return sorted(matches, key=lambda candidate: candidate.stat().st_mtime_ns)
+
+
+def _resolve_updated_raw_files(context) -> list[Path]:
+    result = _require_last_result(context)
+    matches: list[Path] = []
+    for rel_path in result.updated_data_files:
+        if not rel_path.startswith(HIMAWARI_RAW_PREFIX):
+            continue
+        if not rel_path.endswith(".nc"):
             continue
         abs_path = context.repo_root / rel_path
         if abs_path.exists() and abs_path.is_file():
@@ -86,6 +102,65 @@ def step_command_duration_at_least(context, min_seconds: int):
     assert duration >= min_seconds, (
         f"Expected command duration >= {min_seconds}s, found {duration:.2f}s"
     )
+
+
+@then('the current run should produce at least {count:d} updated Himawari raw files for mode "{mode}"')
+def step_current_run_himawari_raw_files(context, count: int, mode: str):
+    matches = _resolve_updated_raw_files(context)
+    assert len(matches) >= count, (
+        f"Expected at least {count} updated Himawari raw files for mode {mode!r}, "
+        f"found {len(matches)}. Matched files: {[str(path) for path in matches]}"
+    )
+    context.updated_himawari_raw_files = matches
+    context.latest_himawari_raw_file = matches[-1]
+
+
+@then('the updated Himawari raw files for mode "{mode}" should include path tokens "{tokens_csv}"')
+def step_updated_himawari_raw_files_include_tokens(context, mode: str, tokens_csv: str):
+    paths = getattr(context, "updated_himawari_raw_files", None)
+    assert paths, (
+        f"No updated Himawari raw files are available for mode {mode!r}. "
+        "Run the corresponding 'current run should produce' step first."
+    )
+
+    rel_paths = [path.relative_to(context.repo_root).as_posix() for path in paths]
+    tokens = _parse_csv(tokens_csv)
+    missing = [token for token in tokens if not any(token in rel_path for rel_path in rel_paths)]
+    assert not missing, (
+        f"Updated Himawari raw files for mode {mode!r} did not include path tokens {missing}. "
+        f"Matched files: {rel_paths}"
+    )
+
+
+@then('the updated Himawari raw files for mode "{mode}" should include month/day directories')
+def step_updated_himawari_raw_files_have_month_day_dirs(context, mode: str):
+    paths = getattr(context, "updated_himawari_raw_files", None)
+    assert paths, (
+        f"No updated Himawari raw files are available for mode {mode!r}. "
+        "Run the corresponding 'current run should produce' step first."
+    )
+
+    rel_paths = [path.relative_to(context.repo_root).as_posix() for path in paths]
+    bad_paths = [
+        rel_path
+        for rel_path in rel_paths
+        if re.fullmatch(r"data/raw/himawari/\d{6}/\d{2}/[^/]+\.nc", rel_path) is None
+    ]
+    assert not bad_paths, (
+        f"Expected raw Himawari files to use YYYYMM/DD directories for mode {mode!r}. "
+        f"Bad paths: {bad_paths}"
+    )
+
+
+@then('the latest updated Himawari raw file for mode "{mode}" should be non-empty')
+def step_latest_himawari_raw_file_non_empty(context, mode: str):
+    raw_path = getattr(context, "latest_himawari_raw_file", None)
+    assert raw_path is not None, (
+        f"No latest Himawari raw file is available for mode {mode!r}. "
+        "Run the corresponding 'current run should produce' step first."
+    )
+    assert raw_path.exists(), f"Latest Himawari raw file does not exist: {raw_path}"
+    assert raw_path.stat().st_size > 0, f"Latest Himawari raw file is empty: {raw_path}"
 
 
 @then('the current run should produce at least {count:d} updated Himawari realtime H3 parquet files')
