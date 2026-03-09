@@ -1,29 +1,21 @@
-# Harness Adoption
+# Harness Adoption History
 
-## Purpose
+## Summary
 
-This repo is adopting a more explicit harness-engineering workflow so that humans and coding agents can load context faster, follow the same operating model, and rely on repository-local validation instead of ad hoc chat instructions.
+The repository trialed a split-doc harness model in early March 2026 by moving substantial operating guidance out of `AGENTS.md` into many focused files under `docs/`.
 
-## Implemented So Far
+After usage feedback, the team observed higher context loss and more execution mistakes from agents. The operating model was therefore re-consolidated so `AGENTS.md` is again the primary guidance surface.
 
-- Phase 0:
-  - first-pass operating principles were frozen in `decisions/2026-03-09-harness-engineering-adoption.md`
-  - the working plan was activated in `plans/2026-03-09-harness-engineering-adoption-tdd-plan.md`
-- Phase 1:
-  - root `AGENTS.md` became a short operating map
-  - durable repository knowledge moved into focused files under `docs/`
-- Phase 1.5:
-  - rebalanced the docs toward repository purpose, concrete code ownership, and pipeline behavior
-  - softened over-broad Behave-first wording so workflow contracts and narrower Python logic are documented differently
+## Current State
 
-## Planned Later Phases
+- `AGENTS.md` is the canonical day-to-day operating guide.
+- `docs/` remains as optional deep reference material.
+- Workflow and test rules are kept concise and aligned to avoid conflicting guidance across files.
 
-- add mechanical repository guardrails
-- extend repository-hygiene contract checks
-- add structured run manifests
-- split CI into fast blocking lanes and slower scheduled checks
-- add recurring cleanup and portability guidance for other repos
+## What Stayed
 
-## Rollout Constraint
+The rollback kept useful instruction improvements introduced during the harness trial:
 
-Early phases are intentionally docs-and-governance heavy. The goal is to improve clarity first, then add enforcement once the team is confident the rules are correct and low-noise.
+- clearer Behave vs pytest selection rules
+- explicit long-run command handling expectations
+- artifact freshness and fail-fast CLI validation emphasis
