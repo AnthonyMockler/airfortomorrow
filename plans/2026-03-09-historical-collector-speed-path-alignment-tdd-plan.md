@@ -145,8 +145,67 @@ User-directed execution order update:
   - Keep one collector file with shared request policy.
   - Remove or parameterize historical-only pacing rather than splitting the file further.
 
+### Himawari H3 Static Path Analysis
+
+- Shared codepath:
+  - `src/himawari_integrated_pipeline.py` invokes `src/data_processors/process_himawari_h3_streaming.py` for both historical and realtime when `--keep-originals` is not set.
+  - The realtime branch only adds `realtime <hours>` CLI arguments before calling the same streaming processor.
+  - Inside `process_himawari_h3_streaming.py`, both modes converge on the same `process_single_file_streaming(...)` function and the same sequential per-file loop.
+- Remaining mode-specific divergence:
+  - Historical uses `collect_netcdf_files(..., data_type="historical")`, which walks month/day directories in sorted order and skips whole dates when interpolated outputs already exist.
+  - Realtime uses `collect_all_downloaded_netcdf_files(...)`, which gathers all downloaded `.nc` files, sorts them by parsed filename datetime, and skips whole dates when realtime interpolated outputs already exist.
+  - This means file selection differs by mode, but the expensive raster/H3 work is shared.
+- Static likely hotspots in shared H3 indexing:
+  - `netcdf_to_tif_cache(...)` opens every NetCDF with xarray and writes a temporary GeoTIFF with rasterio for every file.
+  - `mask(src, boundaries_countries.geometry, crop=True)` clips every temporary raster against the country boundary for every file.
+  - `raster_to_dataframe(...)` performs the raster-to-H3 conversion per file and is the most likely CPU-heavy step in the loop.
+  - The pipeline converts the H3 result from pandas to Polars before writing parquet, so there is an extra in-memory dataframe conversion on every file.
+  - The main loop is explicitly sequential (`Processing {len(all_netcdf_files)} files sequentially...`), so no per-file H3 work is parallelized today.
+- Static likely non-dominant costs:
+  - Country boundary creation happens once per run, not once per file.
+  - Historical vs realtime file enumeration differs, but that cost should be small relative to the per-file NetCDF/TIF/mask/H3 path now that the download-side month filtering has been reduced.
+- Next measurement step:
+  - Profile `process_single_file_streaming(...)` against one real Himawari NetCDF file to separate NetCDF read, TIF write, mask, raster-to-H3 conversion, pandas→Polars conversion, and parquet write time.
+
+### Himawari H3 Single-File Profile Findings
+
+- Focused profiling contract:
+  - `tests/test_himawari_h3_single_file_profile.py` now downloads one representative historical Himawari file and compares the produced H3 parquet against a checked-in expected artifact.
+  - Representative source: `2025-01-03 09:00` for `THA`.
+- Measured timing breakdown from the green Docker run:
+  - `download`: `3.643s`
+  - `boundary_creation`: `4.338s`
+  - `netcdf_to_tif`: `2.004s`
+  - `mask`: `0.009s`
+  - `raster_to_dataframe`: `0.122s`
+  - `polars_conversion`: `0.009s`
+  - `write_parquet`: `0.030s`
+  - `total` per-file processing after setup/download: `2.185s`
+- Interpretation:
+  - The dominant repeatable cost inside the shared H3 loop is NetCDF-to-TIF conversion.
+  - `raster_to_dataframe(...)` is not a leading bottleneck on the representative file and should be treated as a timed black box, not the first optimization target.
+  - Boundary creation is slower than H3 conversion itself, but it is a one-time run cost rather than a per-file loop cost.
+
+### Himawari H3 In-Memory Raster Optimization
+
+- Optimization applied:
+  - The shared streaming processor now stages the NetCDF raster in a rasterio `MemoryFile` instead of writing and reopening a temporary GeoTIFF on disk.
+  - Rasterio-based masking and downstream H3 conversion are unchanged, so the semantic processing path stays aligned with the old implementation.
+- Verification:
+  - `./scripts/run_tests.sh -- tests/test_himawari_h3_single_file_profile.py -q -s`
+  - Result: `2 passed, 2 warnings in 7.75s`
+- Before/after representative-file timings:
+  - `netcdf_to_tif`: `1.209s` -> `0.875s`
+  - `processing_total`: `1.323s` -> `0.962s`
+  - `full_total`: `7.132s` -> `6.974s`
+- Output safety:
+  - The representative-file contract still matched the checked-in expected artifact on schema, row count, sorted H3 keys, metadata columns, and `aod_value` payload.
+- Conclusion:
+  - The first safe H3 optimization win was eliminating temporary GeoTIFF disk I/O.
+  - The next likely Himawari H3 target is boundary reuse/caching or multi-file orchestration rather than `raster_to_dataframe(...)`.
+
 ## Handoff
 
-- Immediate next implementation slice: Himawari shared downloader alignment.
-- Focused execution plan: `plans/2026-03-09-himawari-shared-downloader-tdd-plan.md`
-- After the Himawari downloader slice, return to OpenAQ historical consolidation, then ERA5 historical pacing and wrapper cleanup.
+- Immediate next investigation slice: Himawari H3 indexing profiling on a single real NetCDF file.
+- Focused execution plan completed: `plans/2026-03-09-himawari-shared-downloader-tdd-plan.md`
+- After the H3 profiling slice, choose between reducing the NetCDF→TIF→mask→H3 conversion cost or parallelizing the per-file H3 processing loop before returning to OpenAQ historical consolidation and ERA5 historical pacing cleanup.
