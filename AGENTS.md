@@ -24,12 +24,22 @@ Air for Tomorrow is an end-to-end air quality prediction pipeline. It combines g
 
 Apply this workflow for feature work, bug fixes, regressions, and other executable behavior changes.
 
+### Plan ownership and status
+
+- Work is tracked in markdown plans under `plans/`.
+- Before starting implementation, pick an existing plan or create a new one if no suitable plan exists.
+- Update the selected plan immediately to show it is `In Progress`.
+- Add the active agent, start date, and a short scope note near the top of the plan.
+- Use the plan as the working record for commands run, failures observed, decisions made, and verification evidence.
+- Mark the plan `Complete` only after the documented success criteria and verification steps have passed.
+- If work stops early, leave the plan in a handoff-ready state with current status, blockers, and next recommended step.
+
 ### 1) Document first
 
 - Create a decision note in `decisions/` named `YYYY-MM-DD-<short-slug>.md`.
 - Include: `Decision`, `Why`, `Change Scope`, `Non-Goals`.
 - Create a plan in `plans/` named `YYYY-MM-DD-<short-slug>-tdd-plan.md`.
-- Include: `Feature Goal`, `Red`, `Green`, `Regression Safety`, `Success Criteria`, `Evidence to Capture`.
+- Include: `Status`, `Owner`, `Started`, `Last Updated`, `Feature Goal`, `Scope Guardrails`, `Red`, `Green`, `Regression Safety`, `Success Criteria`, `Evidence to Capture`, `Notes and Findings`, `Handoff`.
 
 ### 2) Test first with Behave
 
@@ -103,7 +113,7 @@ Apply this workflow for feature work, bug fixes, regressions, and other executab
 - Never push to `upstream`; push to `origin` only.
 - `main` is the clean integration branch that tracks `upstream/main`.
 - Keep helper docs and workflow notes on `main`.
-- Create feature or issue branches from clean `main`.
+- Create work branches from clean `main` when branch isolation is needed.
 - When preparing an upstream PR, cherry-pick only the commits that belong in the PR branch.
 - Keep helper-only commits out of upstream PR branches by selective cherry-pick, not by maintaining a separate helper branch.
 
@@ -116,22 +126,42 @@ git remote set-url --push upstream DISABLED
 git config remote.pushDefault origin
 ```
 
-## Issue and PR Workflow
+## Plan-Driven Work Tracking
 
-- Follow `ISSUE_CREATION_GUIDELINES.md` for repo task or improvement issues.
-- Standard issue structure: `Problem` -> `Desired outcome` -> `Constraints / notes` -> `Done when` -> `Verification`.
-- Before taking an issue, confirm it is open, unassigned, and not already active.
-- For issue work, start in a clean worktree and a dedicated branch named `codex/issue-<id>-<slug>`.
-- Read the full issue, including constraints, done criteria, verification steps, and out-of-scope notes.
-- Keep scope tied to the issue; do not add opportunistic refactors unless required.
-- Validate every `Done when` item and run the listed verification before opening a PR.
-- PRs should target `unicef/airfortomorrow:main`, include test evidence, and link the issue with `Closes #<id>` when appropriate.
-- After opening the PR, post an issue update summarizing what changed, key decisions, tradeoffs, and the PR link.
+- Treat the markdown plan as the source of truth for task scope, progress, and evidence.
+- Prefer picking up an existing `plans/*.md` entry instead of starting parallel work on the same topic.
+- When claiming a plan, update it before code changes so other agents can see it is active.
+- Keep notes concise and factual: commands run, failures reproduced, key decisions, tests executed, and artifact paths.
+- Update `Last Updated` whenever the plan meaningfully changes state.
+- If scope changes, revise `Scope Guardrails` and `Success Criteria` before continuing implementation.
+- On completion, summarize what changed, record final verification, and mark the plan `Complete`.
+- If a PR is opened later, use the plan and decision note as the basis for the PR summary and evidence.
 
-## Commands for Issue Work
+## Suggested Plan Template
 
-```bash
-gh issue view <id> --repo AnthonyMockler/airfortomorrow
-git fetch --all --prune
-git worktree add ../airfortomorrow_issue<id> -b codex/issue-<id>-<slug> upstream/main
+```md
+# <Short Title>
+
+- Status: Planned | In Progress | Blocked | Complete
+- Owner: <agent or person>
+- Started: YYYY-MM-DD
+- Last Updated: YYYY-MM-DD
+
+## Feature Goal
+
+## Scope Guardrails
+
+## Red
+
+## Green
+
+## Regression Safety
+
+## Success Criteria
+
+## Evidence to Capture
+
+## Notes and Findings
+
+## Handoff
 ```
