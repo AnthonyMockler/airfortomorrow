@@ -17,12 +17,15 @@ import polars as pl
 import geopandas as gpd
 import rasterio
 from rasterio.mask import mask
+from rasterio.io import MemoryFile
 import numpy as np
 import xarray as xr
 from pathlib import Path
 import shutil
 import re
 from datetime import datetime, timedelta
+from time import perf_counter
+from dotenv import load_dotenv
 
 # Import h3ronpy pandas raster functions
 try:
@@ -42,19 +45,11 @@ def create_country_boundaries_local(country_codes, buffer_degrees=0.4):
     """Use centralized boundary utility."""
     return create_country_boundaries(country_codes, buffer_degrees)
 
-def netcdf_to_tif_cache(netcdf_path, cache_dir):
-    """Convert NetCDF to TIF in cache directory"""
+def netcdf_to_in_memory_raster(netcdf_path):
+    """Convert NetCDF to an in-memory GeoTIFF-like raster dataset."""
     try:
-        print(f"Converting NetCDF to TIF: {netcdf_path}")
-        
-        # Create cache directory if it doesn't exist
-        os.makedirs(cache_dir, exist_ok=True)
-        
-        # Generate TIF filename in cache
-        netcdf_filename = os.path.basename(netcdf_path)
-        tif_filename = netcdf_filename.replace('.nc', '.tif')
-        tif_path = os.path.join(cache_dir, tif_filename)
-        
+        print(f"Converting NetCDF to in-memory raster: {netcdf_path}")
+
         # Open NetCDF file (suppress timedelta warning)
         with xr.open_dataset(netcdf_path, decode_timedelta=False) as ds:
             # Check available variables (Himawari uses AOT_Merged for AOD data)
@@ -100,9 +95,7 @@ def netcdf_to_tif_cache(netcdf_path, cache_dir):
                 len(lons), len(lats)
             )
             
-            # Write to TIF
-            with rasterio.open(
-                tif_path, 'w',
+            profile = dict(
                 driver='GTiff',
                 height=aod_data.shape[0],
                 width=aod_data.shape[1],
@@ -111,15 +104,65 @@ def netcdf_to_tif_cache(netcdf_path, cache_dir):
                 crs='EPSG:4326',
                 transform=transform,
                 nodata=-9999
-            ) as dst:
-                dst.write(aod_data.values, 1)
-        
-        print(f"Successfully converted to TIF: {tif_path}")
-        return tif_path
-        
+            )
+
+            memfile = MemoryFile()
+            with memfile.open(**profile) as dataset:
+                dataset.write(aod_data.values, 1)
+
+        dataset = memfile.open()
+        print(f"Successfully prepared in-memory raster for: {netcdf_path}")
+        return memfile, dataset
+
     except Exception as e:
-        print(f"Error converting NetCDF to TIF {netcdf_path}: {e}")
-        return None
+        print(f"Error converting NetCDF to in-memory raster {netcdf_path}: {e}")
+        return None, None
+
+
+def _record_step_timing(timings, step_name, start_time):
+    """Store elapsed seconds for a named step if timing collection is enabled."""
+    if timings is not None:
+        timings[step_name] = perf_counter() - start_time
+
+
+def build_h3_output_path(netcdf_path, output_root, countries):
+    """Build the destination parquet path for one NetCDF file."""
+    netcdf_path = Path(netcdf_path)
+    countries_str = "_".join(sorted(country.upper() for country in countries))
+    parquet_name = f"{netcdf_path.stem}_{countries_str}.parquet"
+    month_dir = netcdf_path.parent.parent.name
+    day_dir = netcdf_path.parent.name
+    return Path(output_root) / month_dir / day_dir / parquet_name
+
+
+def download_single_himawari_file(month, day, filename, output_root, user=None, password=None):
+    """Download one Himawari NetCDF file into a month/day directory."""
+    load_dotenv()
+    user = user or os.environ.get("HIMAWARI_FTP_USER")
+    password = password or os.environ.get("HIMAWARI_FTP_PASSWORD")
+    if not user or not password:
+        raise ValueError(
+            "HIMAWARI_FTP_USER and HIMAWARI_FTP_PASSWORD are required to download a Himawari file"
+        )
+
+    from src.data_collectors.himawari_aod import connect_to_ftp
+
+    output_dir = Path(output_root) / month / day
+    output_dir.mkdir(parents=True, exist_ok=True)
+    local_path = output_dir / filename
+
+    ftp = connect_to_ftp(user, password)
+    try:
+        ftp.cwd(f"{month}/{day}")
+        with local_path.open("wb") as local_file:
+            ftp.retrbinary(f"RETR {filename}", local_file.write)
+    finally:
+        try:
+            ftp.quit()
+        except Exception:
+            pass
+
+    return str(local_path)
 
 
 def _has_positive_finite_values(values: np.ndarray) -> bool:
@@ -140,39 +183,63 @@ def _handle_early_exit(message: str, netcdf_path: str, keep_netcdf: bool) -> str
         print(f"Warning: Could not delete NetCDF file {netcdf_path}: {delete_error}")
         return f"{message}: {netcdf_path} (NetCDF delete failed)"
 
-def process_single_file_streaming(netcdf_path, parquet_path, hex_resolution, boundaries_countries, cache_dir, compact=False, keep_netcdf=True):
+def process_single_file_streaming(
+    netcdf_path,
+    parquet_path,
+    hex_resolution,
+    boundaries_countries,
+    cache_dir,
+    compact=False,
+    keep_netcdf=True,
+    timings=None,
+):
     """Process a single NetCDF file through the complete pipeline"""
+    total_start = perf_counter()
 
     if os.path.exists(parquet_path):
+        _record_step_timing(timings, "processing_total", total_start)
         print(f"H3 processed {parquet_path} already exists, skipping...")
         return f"Skipped: {parquet_path}"
 
     tif_path = None
+    raster_memfile = None
+    raster_src = None
+    cleanup_start = None
     try:
-        tif_path = netcdf_to_tif_cache(netcdf_path, cache_dir)
-        if not tif_path or not os.path.exists(tif_path):
+        tif_start = perf_counter()
+        raster_memfile, raster_src = netcdf_to_in_memory_raster(netcdf_path)
+        _record_step_timing(timings, "netcdf_to_tif", tif_start)
+        if raster_src is None:
+            _record_step_timing(timings, "processing_total", total_start)
             return _handle_early_exit("NetCDF conversion failed", netcdf_path, keep_netcdf)
 
-        print(f"Processing TIF to H3: {tif_path}")
-        with rasterio.open(tif_path) as src:
+        tif_path = f"in-memory://{os.path.basename(netcdf_path).replace('.nc', '.tif')}"
+        print(f"Processing in-memory raster to H3: {tif_path}")
+        with raster_src as src:
             aod = src.read(1)
             if not _has_positive_finite_values(aod):
+                _record_step_timing(timings, "processing_total", total_start)
                 print(f"No valid data in {tif_path}, skipping...")
                 return _handle_early_exit("No valid data", netcdf_path, keep_netcdf)
 
             try:
+                mask_start = perf_counter()
                 masked_aod, masked_transform = mask(src, boundaries_countries.geometry, crop=True)
+                _record_step_timing(timings, "mask", mask_start)
                 masked_aod = masked_aod[0]
             except Exception as e:
+                _record_step_timing(timings, "processing_total", total_start)
                 print(f"Error masking raster {tif_path}: {e}")
                 return _handle_early_exit("Masking error", netcdf_path, keep_netcdf)
 
         if not _has_positive_finite_values(masked_aod):
+            _record_step_timing(timings, "processing_total", total_start)
             print(f"No valid data after masking {tif_path}, skipping...")
             return _handle_early_exit("No valid data after masking", netcdf_path, keep_netcdf)
 
         try:
             print(f"Converting to H3 resolution {hex_resolution}...")
+            h3_start = perf_counter()
             df_pandas = raster_to_dataframe(
                 in_raster=masked_aod,
                 transform=masked_transform,
@@ -181,16 +248,20 @@ def process_single_file_streaming(netcdf_path, parquet_path, hex_resolution, bou
                 compact=compact,
                 geo=False,
             )
+            _record_step_timing(timings, "raster_to_dataframe", h3_start)
         except Exception as e:
+            _record_step_timing(timings, "processing_total", total_start)
             print(f"Error converting to H3 {tif_path}: {e}")
             return _handle_early_exit("H3 conversion error", netcdf_path, keep_netcdf)
 
         if df_pandas.empty or "cell" not in df_pandas.columns or "value" not in df_pandas.columns:
+            _record_step_timing(timings, "processing_total", total_start)
             print(f"No valid H3 data for {tif_path}, skipping...")
             return _handle_early_exit("No valid H3 data", netcdf_path, keep_netcdf)
 
         try:
             print("Converting to Polars for fast processing...")
+            polars_start = perf_counter()
             df_pandas = df_pandas[["cell", "value"]]
             valid_mask = (
                 df_pandas["value"].notna()
@@ -199,6 +270,7 @@ def process_single_file_streaming(netcdf_path, parquet_path, hex_resolution, bou
             )
             df_pandas = df_pandas.loc[valid_mask]
             if df_pandas.empty:
+                _record_step_timing(timings, "processing_total", total_start)
                 print(f"No valid data after cleaning {tif_path}, skipping...")
                 return _handle_early_exit("No valid data after cleaning", netcdf_path, keep_netcdf)
 
@@ -221,17 +293,22 @@ def process_single_file_streaming(netcdf_path, parquet_path, hex_resolution, bou
             ]).select([
                 "h3_08", "aod_value", "source_file", "month", "day"
             ])
+            _record_step_timing(timings, "polars_conversion", polars_start)
 
             if df_pl.shape[0] == 0:
+                _record_step_timing(timings, "processing_total", total_start)
                 print(f"No valid data after cleaning {tif_path}, skipping...")
                 return _handle_early_exit("No valid data after cleaning", netcdf_path, keep_netcdf)
         except Exception as e:
+            _record_step_timing(timings, "processing_total", total_start)
             print(f"Error processing with Polars {tif_path}: {e}")
             return _handle_early_exit("Polars processing error", netcdf_path, keep_netcdf)
 
         try:
             os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
+            parquet_start = perf_counter()
             df_pl.write_parquet(parquet_path)
+            _record_step_timing(timings, "write_parquet", parquet_start)
             print(f"H3 processed {parquet_path} successfully! ({df_pl.shape[0]} records)")
             result = f"Success: {parquet_path} ({df_pl.shape[0]} records)"
             if not keep_netcdf:
@@ -242,8 +319,10 @@ def process_single_file_streaming(netcdf_path, parquet_path, hex_resolution, bou
                 except Exception as e:
                     print(f"Warning: Could not delete NetCDF file {netcdf_path}: {e}")
                     result += " (NetCDF delete failed)"
+            _record_step_timing(timings, "processing_total", total_start)
             return result
         except Exception as e:
+            _record_step_timing(timings, "processing_total", total_start)
             print(f"Error saving parquet {parquet_path}: {e}")
             return _handle_early_exit("Parquet save error", netcdf_path, keep_netcdf)
 
@@ -251,21 +330,85 @@ def process_single_file_streaming(netcdf_path, parquet_path, hex_resolution, bou
         error_msg = f"Error in streaming pipeline {netcdf_path}: {str(e)}"
         print(error_msg)
         if keep_netcdf:
+            _record_step_timing(timings, "processing_total", total_start)
             return error_msg
         try:
             os.remove(netcdf_path)
             print(f"Deleted NetCDF file (general error): {netcdf_path}")
+            _record_step_timing(timings, "processing_total", total_start)
             return f"{error_msg} (NetCDF deleted)"
         except Exception as delete_e:
             print(f"Warning: Could not delete NetCDF file {netcdf_path}: {delete_e}")
+            _record_step_timing(timings, "processing_total", total_start)
             return f"{error_msg} (NetCDF delete failed)"
     finally:
         try:
-            if tif_path and os.path.exists(tif_path):
-                os.remove(tif_path)
-                print(f"Cleaned up TIF from cache: {tif_path}")
+            cleanup_start = perf_counter()
+            if raster_memfile is not None:
+                raster_memfile.close()
+                print(f"Cleaned up in-memory raster cache: {tif_path}")
         except Exception as e:
-            print(f"Warning: Could not clean up TIF file {tif_path}: {e}")
+            print(f"Warning: Could not clean up in-memory raster {tif_path}: {e}")
+        finally:
+            if cleanup_start is not None:
+                _record_step_timing(timings, "cleanup", cleanup_start)
+            if timings is not None and "processing_total" not in timings:
+                timings["processing_total"] = perf_counter() - total_start
+
+
+def profile_single_file_streaming(
+    month,
+    day,
+    filename,
+    countries,
+    output_root,
+    keep_netcdf=True,
+    user=None,
+    password=None,
+):
+    """Download and process one representative Himawari file with per-step timings."""
+    timings = {}
+    full_start = perf_counter()
+
+    raw_root = Path(output_root) / "raw"
+    h3_root = Path(output_root) / "h3"
+    cache_dir = Path(output_root) / "cache" / "tif"
+
+    download_start = perf_counter()
+    netcdf_path = download_single_himawari_file(
+        month=month,
+        day=day,
+        filename=filename,
+        output_root=raw_root,
+        user=user,
+        password=password,
+    )
+    _record_step_timing(timings, "download", download_start)
+
+    boundaries_start = perf_counter()
+    sorted_country_codes = sorted(country.upper() for country in countries)
+    boundaries_countries = create_country_boundaries(sorted_country_codes, buffer_degrees=0.4)
+    _record_step_timing(timings, "boundary_creation", boundaries_start)
+
+    parquet_path = build_h3_output_path(netcdf_path, h3_root, sorted_country_codes)
+    result = process_single_file_streaming(
+        netcdf_path=netcdf_path,
+        parquet_path=str(parquet_path),
+        hex_resolution=8,
+        boundaries_countries=boundaries_countries,
+        cache_dir=str(cache_dir),
+        compact=False,
+        keep_netcdf=keep_netcdf,
+        timings=timings,
+    )
+    _record_step_timing(timings, "full_total", full_start)
+
+    return {
+        "result": result,
+        "netcdf_path": netcdf_path,
+        "parquet_path": str(parquet_path),
+        "timings": timings,
+    }
 
 def check_interpolated_file_exists(date_str, countries, mode='historical'):
     """Check if interpolated file already exists for the given date"""
