@@ -14,6 +14,7 @@ import os
 import argparse
 import logging
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from ftplib import FTP
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,6 +30,41 @@ from pathlib import Path
 
 # Import centralized boundary utilities
 from src.utils.boundary_utils import create_country_boundaries
+
+
+HIMAWARI_FTP_BASE_DIR = "/pub/himawari/L3/ARP/031/"
+
+
+@dataclass(frozen=True)
+class DownloadBatch:
+    month: str
+    day: str
+    hourly_files: tuple[str, ...]
+
+    @property
+    def date_str(self) -> str:
+        return f"{self.month}{self.day}"
+
+    @property
+    def day_path(self) -> str:
+        return f"{self.month}/{self.day}"
+
+
+@dataclass
+class DownloadPlan:
+    batches: list[DownloadBatch]
+    skipped_interpolated_dates: list[str]
+    skipped_interpolated_files: list[tuple[str, str, str]]
+    skipped_h3_files: list[tuple[str, str, str]]
+    skipped_existing_files: list[tuple[str, str, str]]
+
+    @property
+    def skipped_files(self) -> list[tuple[str, str, str]]:
+        return (
+            self.skipped_interpolated_files
+            + self.skipped_h3_files
+            + self.skipped_existing_files
+        )
 
 def setup_logging(log_dir, mode):
     """Set up logging configuration"""
@@ -55,8 +91,7 @@ def connect_to_ftp(user, password):
     ftp.login(user=user, passwd=password)
     
     # Navigate to the directory for L3 Aerosol Property data
-    overall_path = "/pub/himawari/L3/ARP/031/"
-    directories = overall_path.strip("/").split("/")
+    directories = HIMAWARI_FTP_BASE_DIR.strip("/").split("/")
     
     for directory in directories:
         ftp.cwd(directory)
@@ -73,6 +108,31 @@ def parse_date_from_path(path):
         month = year_month[4:6]
         return datetime(int(year), int(month), int(day))
     return None
+
+
+def filter_month_directories_for_range(date_month_files, start_dt, end_dt):
+    """Keep only month directories that overlap the requested historical range."""
+    matching_months = []
+
+    for month_dir in sorted(date_month_files):
+        try:
+            year = int(month_dir[:4])
+            month = int(month_dir[4:6])
+            month_start = datetime(year, month, 1)
+            if month == 12:
+                next_month = datetime(year + 1, 1, 1)
+            else:
+                next_month = datetime(year, month + 1, 1)
+            month_end = next_month - timedelta(days=1)
+        except (ValueError, IndexError):
+            continue
+
+        if month_end < start_dt or month_start > end_dt:
+            continue
+
+        matching_months.append(month_dir)
+
+    return matching_months
 
 def get_historical_data_periods(ftp, start_date, end_date):
     """
@@ -123,10 +183,14 @@ def get_historical_data_periods(ftp, start_date, end_date):
                   f"({min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')})")
             return []
     
-    # For historical collection, we'll take the specified date range
+    # For historical collection, only inspect month directories that overlap the requested range.
     all_day_paths = []
-    months_to_check = date_month_files  # Check all months instead of just the last 12
+    months_to_check = filter_month_directories_for_range(date_month_files, start_dt, end_dt)
     print(f"DEBUG: Months to check: {months_to_check}")
+
+    if not months_to_check:
+        print(f"WARNING: No month directories overlap the requested date range ({start_date} to {end_date})")
+        return []
     
     for idx, month in enumerate(months_to_check, 1):
         try:
@@ -306,114 +370,159 @@ def check_interpolated_file_exists(date_str, countries=['LAO', 'THA'], mode='his
     interpolated_file = interpolated_dir / f"interpolated_h3_aod_{date_str}_{country_str}.parquet"
     return interpolated_file.exists()
 
-def download_historical_files(ftp, day_paths, output_dir, logger, force_download=False, check_h3_exists=False, h3_base_dir=None, mode='historical', countries=['LAO', 'THA']):
-    """Download all hourly files for a list of days"""
-    total_downloaded = 0
-    total_skipped = 0
-    days_skipped = 0
-    
+def build_download_batches(file_paths):
+    """Group individual file paths into per-day download batches."""
+    batches_by_day = {}
+    for month, day, hourly_file in file_paths:
+        batches_by_day.setdefault((month, day), []).append(hourly_file)
+
+    return [
+        DownloadBatch(month=month, day=day, hourly_files=tuple(hourly_files))
+        for (month, day), hourly_files in batches_by_day.items()
+    ]
+
+
+def _reset_ftp_to_base(ftp):
+    """Best-effort reset to the Himawari FTP base directory."""
+    try:
+        ftp.cwd(HIMAWARI_FTP_BASE_DIR)
+    except Exception:
+        pass
+
+
+def discover_historical_day_batches(ftp, day_paths, logger):
+    """List hourly files for each historical day path and normalize them into batches."""
+    batches = []
+
     for day_path in day_paths:
         try:
-            # Extract date from day_path (e.g., "202510/22" -> "20251022")
-            date_str = day_path.replace('/', '')
-            
-            # Check if interpolated file already exists for this date
-            if check_interpolated_file_exists(date_str, countries, mode):
-                logger.info(f"Skipping {day_path} - interpolated file already exists")
-                days_skipped += 1
-                continue
-            
-            # Navigate to the day directory
             ftp.cwd(day_path)
-            logger.info(f"Processing directory: {day_path}")
-            
-            # Get list of hourly files
-            hourly_files = ftp.nlst()
-            
-            # Create local directory for the files
-            local_dir = os.path.join(output_dir, day_path)
-            os.makedirs(local_dir, exist_ok=True)
-            
-            downloaded_files = []
-            skipped_files = []
-            
-            # Download each hourly file
-            for hourly_file in hourly_files:
-                target_file_path = os.path.join(local_dir, hourly_file)
-                
-                # Check if H3 file already exists (if enabled)
-                if check_h3_exists and h3_base_dir:
-                    if check_h3_file_exists(target_file_path, h3_base_dir, mode):
-                        logger.info(f"Skipping {hourly_file} - H3 file already exists")
-                        skipped_files.append(hourly_file)
-                        continue
-                
-                # Check if NetCDF file already exists
-                if os.path.exists(target_file_path) and not force_download:
-                    skipped_files.append(hourly_file)
-                    continue
-                
-                # Download the file
-                with open(target_file_path, "wb") as local_file:
-                    ftp.retrbinary(f"RETR {hourly_file}", local_file.write)
-                
-                downloaded_files.append(hourly_file)
-            
-            logger.info(f"Downloaded {len(downloaded_files)} new files for {day_path}")
-            if skipped_files:
-                logger.info(f"Skipped {len(skipped_files)} existing files for {day_path}")
-            
-            total_downloaded += len(downloaded_files)
-            total_skipped += len(skipped_files)
-            
-            # Return to parent directory
-            ftp.cwd("..")
-            ftp.cwd("..")
-            
-        except Exception as e:
-            logger.error(f"Error downloading files for {day_path}: {str(e)}")
-            # Try to return to root directory
-            try:
-                ftp.cwd("/pub/himawari/L3/ARP/031/")
-            except:
-                # If that fails, just reconnect
-                pass
-    
-    if days_skipped > 0:
-        logger.info(f"Skipped {days_skipped} days with existing interpolated files")
-    
-    return total_downloaded, total_skipped
+            hourly_files = sorted(ftp.nlst())
+            month, day = day_path.split("/", 1)
+            batches.append(
+                DownloadBatch(month=month, day=day, hourly_files=tuple(hourly_files))
+            )
+        except Exception as error:
+            logger.error(f"Error preparing historical batch {day_path}: {error}")
+        finally:
+            _reset_ftp_to_base(ftp)
 
-def _download_realtime_day_batch(
-    month,
-    day,
-    hourly_files,
+    return batches
+
+
+def build_download_plan(
+    batches,
+    output_dir,
+    logger,
+    force_download=False,
+    check_h3_exists=False,
+    h3_base_dir=None,
+    mode="historical",
+    countries=None,
+):
+    """Apply shared skip rules and return the normalized download plan."""
+    if countries is None:
+        countries = ["LAO", "THA"]
+
+    planned_batches = []
+    skipped_interpolated_dates = []
+    skipped_interpolated_files = []
+    skipped_h3_files = []
+    skipped_existing_files = []
+
+    for batch in batches:
+        if check_interpolated_file_exists(batch.date_str, countries, mode):
+            logger.info(f"Skipping {batch.day_path} - interpolated file already exists")
+            skipped_interpolated_dates.append(batch.date_str)
+            skipped_interpolated_files.extend(
+                (batch.month, batch.day, hourly_file)
+                for hourly_file in batch.hourly_files
+            )
+            continue
+
+        local_dir = os.path.join(output_dir, batch.month, batch.day)
+        os.makedirs(local_dir, exist_ok=True)
+
+        files_to_download = []
+        for hourly_file in batch.hourly_files:
+            target_file_path = os.path.join(local_dir, hourly_file)
+
+            if check_h3_exists and h3_base_dir and check_h3_file_exists(
+                target_file_path, h3_base_dir, mode
+            ):
+                logger.info(
+                    f"Skipping {batch.day_path}/{hourly_file} - H3 file already exists"
+                )
+                skipped_h3_files.append((batch.month, batch.day, hourly_file))
+                continue
+
+            if os.path.exists(target_file_path) and not force_download:
+                logger.info(f"Skipping existing file: {batch.day_path}/{hourly_file}")
+                skipped_existing_files.append((batch.month, batch.day, hourly_file))
+                continue
+
+            files_to_download.append(hourly_file)
+
+        if files_to_download:
+            planned_batches.append(
+                DownloadBatch(
+                    month=batch.month,
+                    day=batch.day,
+                    hourly_files=tuple(files_to_download),
+                )
+            )
+
+    return DownloadPlan(
+        batches=planned_batches,
+        skipped_interpolated_dates=skipped_interpolated_dates,
+        skipped_interpolated_files=skipped_interpolated_files,
+        skipped_h3_files=skipped_h3_files,
+        skipped_existing_files=skipped_existing_files,
+    )
+
+
+def _download_day_batch_with_connection(ftp_conn, batch, output_dir, logger):
+    """Download one day batch with an existing FTP connection."""
+    downloaded_files = []
+    local_dir = os.path.join(output_dir, batch.month, batch.day)
+    os.makedirs(local_dir, exist_ok=True)
+
+    try:
+        ftp_conn.cwd(batch.day_path)
+        logger.info(f"Processing directory: {batch.day_path}")
+
+        for hourly_file in batch.hourly_files:
+            target_file_path = os.path.join(local_dir, hourly_file)
+            try:
+                with open(target_file_path, "wb") as local_file:
+                    ftp_conn.retrbinary(f"RETR {hourly_file}", local_file.write)
+                downloaded_files.append((batch.month, batch.day, hourly_file))
+                logger.info(f"Downloaded {batch.day_path}/{hourly_file}")
+            except Exception as file_error:
+                logger.error(
+                    f"Error downloading {batch.day_path}/{hourly_file}: {file_error}"
+                )
+    except Exception as batch_error:
+        logger.error(f"Error downloading batch {batch.day_path}: {batch_error}")
+    finally:
+        _reset_ftp_to_base(ftp_conn)
+
+    logger.info(f"Downloaded {len(downloaded_files)} new files for {batch.day_path}")
+    return downloaded_files
+
+
+def _download_day_batch_with_fresh_connection(
+    batch,
     output_dir,
     ftp_user,
     ftp_password,
     logger,
 ):
-    """Download all realtime files for one day using a dedicated FTP connection."""
-    downloaded_files = []
+    """Download one day batch using its own FTP connection."""
     ftp_conn = None
-    local_dir = os.path.join(output_dir, month, day)
-    os.makedirs(local_dir, exist_ok=True)
-
     try:
         ftp_conn = connect_to_ftp(ftp_user, ftp_password)
-        ftp_conn.cwd(f"{month}/{day}")
-
-        for hourly_file in hourly_files:
-            target_file_path = os.path.join(local_dir, hourly_file)
-            try:
-                with open(target_file_path, "wb") as local_file:
-                    ftp_conn.retrbinary(f"RETR {hourly_file}", local_file.write)
-                downloaded_files.append((month, day, hourly_file))
-            except Exception as file_error:
-                logger.error(f"Error downloading {month}/{day}/{hourly_file}: {file_error}")
-
-    except Exception as batch_error:
-        logger.error(f"Error downloading batch {month}/{day}: {batch_error}")
+        return _download_day_batch_with_connection(ftp_conn, batch, output_dir, logger)
     finally:
         if ftp_conn is not None:
             try:
@@ -421,7 +530,132 @@ def _download_realtime_day_batch(
             except Exception:
                 pass
 
+
+def execute_download_plan(
+    plan,
+    output_dir,
+    logger,
+    ftp=None,
+    download_workers=1,
+    ftp_user=None,
+    ftp_password=None,
+):
+    """Execute the shared download plan sequentially or with day-level workers."""
+    if not plan.batches:
+        return []
+
+    use_threaded_downloads = (
+        download_workers > 1
+        and len(plan.batches) > 1
+        and ftp_user
+        and ftp_password
+    )
+
+    downloaded_files = []
+
+    if use_threaded_downloads:
+        max_workers = min(download_workers, len(plan.batches))
+        logger.info(f"Using threaded downloads with {max_workers} worker threads")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(
+                    _download_day_batch_with_fresh_connection,
+                    batch,
+                    output_dir,
+                    ftp_user,
+                    ftp_password,
+                    logger,
+                )
+                for batch in plan.batches
+            ]
+            for future in as_completed(futures):
+                downloaded_files.extend(future.result())
+        return downloaded_files
+
+    if download_workers > 1 and (not ftp_user or not ftp_password):
+        logger.warning(
+            "download_workers > 1 requested, but FTP credentials were not provided "
+            "for worker reconnects; falling back to sequential downloads"
+        )
+    elif download_workers > 1 and len(plan.batches) <= 1:
+        logger.info("Only one day directory requires download; running sequentially")
+
+    owns_connection = False
+    ftp_conn = ftp
+    if ftp_conn is None:
+        if not ftp_user or not ftp_password:
+            raise ValueError(
+                "FTP credentials are required when no existing FTP connection is provided."
+            )
+        ftp_conn = connect_to_ftp(ftp_user, ftp_password)
+        owns_connection = True
+
+    try:
+        for batch in plan.batches:
+            downloaded_files.extend(
+                _download_day_batch_with_connection(ftp_conn, batch, output_dir, logger)
+            )
+    finally:
+        if owns_connection:
+            try:
+                ftp_conn.quit()
+            except Exception:
+                pass
+
     return downloaded_files
+
+
+def download_historical_files(
+    ftp,
+    day_paths,
+    output_dir,
+    logger,
+    force_download=False,
+    check_h3_exists=False,
+    h3_base_dir=None,
+    mode='historical',
+    countries=None,
+    download_workers=1,
+    ftp_user=None,
+    ftp_password=None,
+):
+    """Download all hourly files for a list of historical day paths."""
+    if countries is None:
+        countries = ['LAO', 'THA']
+
+    candidate_batches = discover_historical_day_batches(ftp, day_paths, logger)
+    plan = build_download_plan(
+        candidate_batches,
+        output_dir,
+        logger,
+        force_download=force_download,
+        check_h3_exists=check_h3_exists,
+        h3_base_dir=h3_base_dir,
+        mode=mode,
+        countries=countries,
+    )
+
+    if plan.skipped_interpolated_dates:
+        logger.info(
+            f"Skipped {len(plan.skipped_interpolated_dates)} days with existing interpolated files"
+        )
+
+    if not plan.batches:
+        logger.info("No historical files left to download after skip checks")
+        return 0, len(plan.skipped_h3_files) + len(plan.skipped_existing_files)
+
+    downloaded_files = execute_download_plan(
+        plan,
+        output_dir,
+        logger,
+        ftp=ftp,
+        download_workers=download_workers,
+        ftp_user=ftp_user,
+        ftp_password=ftp_password,
+    )
+
+    skipped_files_count = len(plan.skipped_h3_files) + len(plan.skipped_existing_files)
+    return len(downloaded_files), skipped_files_count
 
 
 def download_realtime_files(
@@ -442,104 +676,39 @@ def download_realtime_files(
     if countries is None:
         countries = ['LAO', 'THA']
 
-    downloaded_files = []
-    skipped_files = []
-    dates_with_interpolated = set()
-    files_to_download_by_day = {}
+    candidate_batches = build_download_batches(file_paths)
+    plan = build_download_plan(
+        candidate_batches,
+        output_dir,
+        logger,
+        force_download=force_download,
+        check_h3_exists=check_h3_exists,
+        h3_base_dir=h3_base_dir,
+        mode=mode,
+        countries=countries,
+    )
 
-    for month, day, hourly_file in file_paths:
-        date_str = month + day
-
-        if date_str not in dates_with_interpolated:
-            if check_interpolated_file_exists(date_str, countries, mode):
-                logger.info(f"Skipping date {month}/{day} - interpolated file already exists")
-                dates_with_interpolated.add(date_str)
-
-        if date_str in dates_with_interpolated:
-            skipped_files.append((month, day, hourly_file))
-            continue
-
-        local_dir = os.path.join(output_dir, month, day)
-        os.makedirs(local_dir, exist_ok=True)
-        target_file_path = os.path.join(local_dir, hourly_file)
-
-        if check_h3_exists and h3_base_dir and check_h3_file_exists(target_file_path, h3_base_dir, mode):
-            logger.info(f"Skipping {month}/{day}/{hourly_file} - H3 file already exists")
-            skipped_files.append((month, day, hourly_file))
-            continue
-
-        if os.path.exists(target_file_path) and not force_download:
-            logger.info(f"Skipping existing file: {month}/{day}/{hourly_file}")
-            skipped_files.append((month, day, hourly_file))
-            continue
-
-        day_key = (month, day)
-        files_to_download_by_day.setdefault(day_key, []).append(hourly_file)
-
-    if dates_with_interpolated:
-        logger.info(f"Skipped {len(dates_with_interpolated)} dates with existing interpolated files")
-
-    if not files_to_download_by_day:
+    if not plan.batches:
         logger.info("No realtime files left to download after skip checks")
-        return downloaded_files, skipped_files
+        return [], plan.skipped_files
 
-    total_planned = sum(len(hourly_files) for hourly_files in files_to_download_by_day.values())
+    total_planned = sum(len(batch.hourly_files) for batch in plan.batches)
     logger.info(
-        f"Realtime download plan: {total_planned} files across {len(files_to_download_by_day)} day directories "
+        f"Realtime download plan: {total_planned} files across {len(plan.batches)} day directories "
         f"(workers={download_workers})"
     )
 
-    use_threaded_downloads = (
-        download_workers > 1
-        and len(files_to_download_by_day) > 1
-        and ftp_user
-        and ftp_password
+    downloaded_files = execute_download_plan(
+        plan,
+        output_dir,
+        logger,
+        ftp=ftp,
+        download_workers=download_workers,
+        ftp_user=ftp_user,
+        ftp_password=ftp_password,
     )
 
-    if use_threaded_downloads:
-        max_workers = min(download_workers, len(files_to_download_by_day))
-        logger.info(f"Using threaded realtime downloads with {max_workers} worker threads")
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [
-                executor.submit(
-                    _download_realtime_day_batch,
-                    month,
-                    day,
-                    hourly_files,
-                    output_dir,
-                    ftp_user,
-                    ftp_password,
-                    logger,
-                )
-                for (month, day), hourly_files in files_to_download_by_day.items()
-            ]
-            for future in as_completed(futures):
-                downloaded_files.extend(future.result())
-    else:
-        if download_workers > 1 and (not ftp_user or not ftp_password):
-            logger.warning("download_workers > 1 requested, but FTP credentials were not provided for worker reconnects; falling back to sequential downloads")
-        elif download_workers > 1 and len(files_to_download_by_day) <= 1:
-            logger.info("Only one day directory requires download; running sequentially")
-
-        for (month, day), hourly_files in files_to_download_by_day.items():
-            try:
-                ftp.cwd(f"{month}/{day}")
-                for hourly_file in hourly_files:
-                    local_dir = os.path.join(output_dir, month, day)
-                    target_file_path = os.path.join(local_dir, hourly_file)
-                    with open(target_file_path, "wb") as local_file:
-                        ftp.retrbinary(f"RETR {hourly_file}", local_file.write)
-                    logger.info(f"Downloaded {month}/{day}/{hourly_file}")
-                    downloaded_files.append((month, day, hourly_file))
-                ftp.cwd("/pub/himawari/L3/ARP/031/")
-            except Exception as e:
-                logger.error(f"Error downloading batch {month}/{day}: {e}")
-                try:
-                    ftp.cwd("/pub/himawari/L3/ARP/031/")
-                except Exception:
-                    pass
-
-    return downloaded_files, skipped_files
+    return downloaded_files, plan.skipped_files
 
 def transform_nc_to_tif(raw_data_dir, tif_output_dir, logger, mode='historical', time_limit=None, sort_reverse=False, start_date=None, end_date=None):
     """Transform downloaded NetCDF files to GeoTIFF format"""
@@ -777,7 +946,7 @@ def main():
     parser.add_argument('--hours', type=int, default=24,
                         help='Number of hours to collect in realtime mode (default: 24)')
     parser.add_argument('--download-workers', type=int, default=4,
-                        help='Number of worker threads for realtime downloads (default: 4)')
+                        help='Number of worker threads for day-level downloads (default: 4)')
     parser.add_argument('--force-download', action='store_true',
                         help='Force re-download of existing files')
     
@@ -870,7 +1039,10 @@ def main():
                 total_downloaded, total_skipped = download_historical_files(
                     ftp, day_paths, args.raw_data_dir, logger, args.force_download,
                     check_h3_exists=args.skip_if_h3_exists, h3_base_dir=args.h3_dir, mode='historical',
-                    countries=args.countries
+                    countries=args.countries,
+                    download_workers=args.download_workers,
+                    ftp_user=user,
+                    ftp_password=password,
                 )
                 
                 logger.info(f"Download complete: {total_downloaded} files downloaded, {total_skipped} files skipped")

@@ -64,6 +64,38 @@ def check_existing_interpolated_file(date_str: str, countries: List[str], config
     interpolated_file = interpolated_dir / f"interpolated_h3_aod_{date_str}_{country_str}.parquet"
     return interpolated_file.exists()
 
+
+def build_himawari_download_command(args: argparse.Namespace) -> list[str]:
+    """Build the collector command for the download step."""
+    download_cmd = ["python", "src/data_collectors/himawari_aod.py", "--mode", args.mode]
+
+    if args.mode == 'historical':
+        download_cmd.extend(["--start-date", args.start_date, "--end-date", args.end_date])
+    else:
+        download_cmd.extend(["--hours", str(args.hours)])
+
+    download_cmd.extend(["--download-workers", str(args.download_workers)])
+    download_cmd.extend(["--raw-data-dir", args.raw_data_dir])
+    download_cmd.extend(["--tif-dir", args.tif_dir])
+    download_cmd.extend(["--log-dir", args.log_dir])
+
+    if args.force_download:
+        download_cmd.append("--force-download")
+
+    # Always enable H3 checking to skip existing files and save bandwidth
+    download_cmd.append("--skip-if-h3-exists")
+    download_cmd.extend(["--h3-dir", args.h3_dir])
+
+    if args.countries:
+        download_cmd.append("--countries")
+        download_cmd.extend(args.countries)
+
+    if not args.keep_originals:
+        # Use cache: download only and let the streaming H3 stage consume the NetCDF files.
+        download_cmd.append("--download-only")
+
+    return download_cmd
+
 def main():
     """Main integrated pipeline function"""
     parser = argparse.ArgumentParser(description='Integrated Himawari AOD Pipeline')
@@ -230,34 +262,7 @@ def main():
         logger.info(f"Force download: {'ENABLED' if args.force_download else 'DISABLED'}")
         logger.info(f"Countries: {', '.join(args.countries)}")
         
-        download_cmd = ["python", "src/data_collectors/himawari_aod.py", "--mode", args.mode]
-        
-        if args.mode == 'historical':
-            download_cmd.extend(["--start-date", args.start_date, "--end-date", args.end_date])
-        else:
-            download_cmd.extend(["--hours", str(args.hours)])
-            download_cmd.extend(["--download-workers", str(args.download_workers)])
-        
-        download_cmd.extend(["--raw-data-dir", args.raw_data_dir])
-        download_cmd.extend(["--tif-dir", args.tif_dir])
-        download_cmd.extend(["--log-dir", args.log_dir])
-        
-        if args.force_download:
-            download_cmd.append("--force-download")
-        
-        # Always enable H3 checking to skip existing files and save bandwidth
-        download_cmd.append("--skip-if-h3-exists")
-        download_cmd.extend(["--h3-dir", args.h3_dir])
-        
-        # Add countries for interpolated file checking
-        if args.countries:
-            download_cmd.append("--countries")
-            download_cmd.extend(args.countries)
-        
-        # Configure download based on processing strategy
-        if not args.keep_originals:
-            # Use cache: Download only (no permanent TIF)
-            download_cmd.append("--download-only")
+        download_cmd = build_himawari_download_command(args)
         
         logger.info(f"Starting download...")
         success, stdout, stderr = run_command(
