@@ -351,7 +351,7 @@ If you use this model or pipeline, please cite:
 ```
 @software{UNICEF_AirQuality_Laos_Thailand_2025,
   author = {UNICEF East Asia-Pacific Frontier Data Lab and UNICEF Lao PDR Office and collaborators},
-  title = {Air Quality Prediction System for Laos and Thailand (PM2.5 Machine Learning Model)},
+  title = {Air for Tomorrow for Laos and Thailand (PM2.5 Machine Learning Model)},
   year = {2025},
   howpublished = {\url{https://github.com/unicef/airfortomorrow}},
   note = {Predictive model for fine particulate matter (PM2.5) using multisource data, implemented in XGBoost}
@@ -360,7 +360,7 @@ If you use this model or pipeline, please cite:
 
 **APA:**
 
-UNICEF East Asia and Pacific Frontier Data Lab, & UNICEF Lao PDR. (2025). *Air Quality Prediction System for Laos and Thailand: PM2.5 Machine Learning Model* [Computer software]. https://github.com/unicef/airfortomorrow
+UNICEF East Asia and Pacific Frontier Data Lab, & UNICEF Lao PDR. (2025). *Air for Tomorrow for Laos and Thailand: PM2.5 Machine Learning Model* [Computer software]. https://github.com/unicef/airfortomorrow
 
 (No academic paper is available yet; these citations reference the project and code repository.)
 

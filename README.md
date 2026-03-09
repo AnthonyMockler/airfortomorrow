@@ -273,7 +273,7 @@ Detailed workflow documentation:
 - **[Himawari Satellite AOD](DOCUMENTATION.md#3-himawari-satellite-aod-data)**
 - **[ERA5 Meteorological Data](DOCUMENTATION.md#4-era5-meteorological-data)**
 - **[Silver Dataset Generation](DOCUMENTATION.md#5-silver-dataset-generation)**
-- **[Air Quality Prediction System](DOCUMENTATION.md#6-air-quality-prediction-system)**
+- **[Air for Tomorrow](DOCUMENTATION.md#6-air-for-tomorrow)**
 
 ---
 

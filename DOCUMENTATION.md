@@ -15,7 +15,7 @@ Technical reference for the Air for tomorrow pipeline, including workflows and c
    - [3. Himawari Satellite AOD Data](#3-himawari-satellite-aod-data)
    - [4. ERA5 Meteorological Data](#4-era5-meteorological-data)
    - [5. Silver Dataset Generation](#5-silver-dataset-generation)
-   - [6. Air Quality Prediction System](#6-air-quality-prediction-system)
+   - [6. Air for Tomorrow](#6-air-for-tomorrow)
 3. [Model Information](#model-information)
 4. [Docker Advanced](#docker-advanced)
 5. [Project Structure](#project-structure)
@@ -694,7 +694,7 @@ data/silver/
 
 ---
 
-### 6. Air Quality Prediction System
+### 6. Air for Tomorrow
 
 Uses pre-trained XGBoost model to predict PM2.5 concentrations from silver datasets.
 
@@ -812,7 +812,7 @@ Validate predictions against ground truth sensor measurements:
 
 ### XGBoost Prediction System
 
-The Air Quality Prediction System uses an XGBoost regression model to predict PM2.5 concentrations.
+Air for Tomorrow uses an XGBoost regression model to predict PM2.5 concentrations.
 
 #### Model Details
 
