@@ -190,6 +190,7 @@ class PipelineRunner:
         # Add end year if different from start year
         if start_year != end_year:
             cmd.append(end_year)
+        cmd.extend(['--start-date', args.start_date, '--end-date', args.end_date])
         if getattr(args, 'test_mode', False):
             cmd.append('--test')
             

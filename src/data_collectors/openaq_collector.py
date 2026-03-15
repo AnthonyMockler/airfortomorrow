@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 
 from functools import wraps
 from pandas import json_normalize
+from time import perf_counter
 
 
 from src.data_collectors.base_collector import BaseCollector
@@ -135,6 +136,7 @@ class OpenAQCollector(BaseCollector):
         # For backwards compatibility, update old-style config paths
         self.config['paths']['raw_data_openaq_historical'] = hist_path
         self.config['paths']['raw_data_openaq_realtime'] = realtime_path
+        self.last_sensor_country_profile: Dict[str, Any] = {}
 
     def get_country_codes(self) -> List[int]:
         """Get OpenAQ country codes from configuration."""
@@ -582,6 +584,22 @@ class OpenAQCollector(BaseCollector):
         country_codes = self.get_country_codes()
         limit = 1000  # Maximum number of sensors to retrieve
         indicators = self.get_indicators()
+        profile: Dict[str, Any] = {
+            "country_codes": list(country_codes),
+            "indicators": list(indicators) if indicators else [],
+            "request_limit": limit,
+            "api_request_seconds": 0.0,
+            "normalize_dataframe_seconds": 0.0,
+            "rename_and_geometry_seconds": 0.0,
+            "explode_seconds": 0.0,
+            "sensor_metadata_seconds": 0.0,
+            "indicator_filter_seconds": 0.0,
+            "processing_total_seconds": 0.0,
+            "result_locations": 0,
+            "result_sensors_before_filter": 0,
+            "result_sensors_after_filter": 0,
+            "status": "started",
+        }
         
         print(f"Country codes: {country_codes}")
         print(f"Filter indicators: {indicators if indicators else 'No filters - all sensor types will be included'}")
@@ -590,13 +608,14 @@ class OpenAQCollector(BaseCollector):
         # Initialize OpenAQ client with API key
         client = OpenAQ(api_key=self.get_api_key_from_config())
         
-        start_time = time.time()
+        start_time = perf_counter()
         print("\nMaking API request to fetch locations...")
 
         # Get the locations in specified countries
         self.logger.info(f"Fetching locations for country codes: {country_codes}")
         try:
             # Get locations data
+            api_start = perf_counter()
             locations = client.locations.list(
                 countries_id=country_codes,
                 limit=limit
@@ -605,28 +624,36 @@ class OpenAQCollector(BaseCollector):
             # Convert response to dictionary and normalize
             data_locations = locations.dict()
             
-            api_time = time.time() - start_time
+            profile["api_request_seconds"] = perf_counter() - api_start
+            api_time = profile["api_request_seconds"]
             print(f"API request completed in {self._format_time(api_time)}")
             
             # Debug logging
             self.logger.info(f"API Response keys: {list(data_locations.keys())}")
             self.logger.info(f"Number of results: {len(data_locations.get('results', []))}")
             print(f"Received {len(data_locations.get('results', []))} locations from API")
+            profile["result_locations"] = len(data_locations.get('results', []))
             
             # Check if we have results
             if 'results' not in data_locations or not data_locations['results']:
                 self.logger.error("No results found in the API response")
                 print("Error: No location data found in API response")
+                profile["status"] = "empty"
+                profile["processing_total_seconds"] = perf_counter() - start_time
+                self.last_sensor_country_profile = profile
                 return pd.DataFrame()
                 
             print("\nProcessing location data...")
             
             # Process the results into a dataframe
+            normalize_start = perf_counter()
             df_sensors_country = pd.json_normalize(data_locations['results'])
+            profile["normalize_dataframe_seconds"] = perf_counter() - normalize_start
             self.logger.info(f"DataFrame created with {len(df_sensors_country)} rows")
             self.logger.info(f"DataFrame columns: {df_sensors_country.columns.tolist()}")
 
             # Rename columns 
+            geometry_start = perf_counter()
             df_sensors_country.rename(columns={
                 'coordinates.latitude': 'latitude',
                 'coordinates.longitude': 'longitude',
@@ -648,6 +675,7 @@ class OpenAQCollector(BaseCollector):
 
             # Transform to geodataframe
             gdf_sensors_country = gpd.GeoDataFrame(df_sensors_country, geometry='geometry')
+            profile["rename_and_geometry_seconds"] = perf_counter() - geometry_start
             self.logger.info(f"Created GeoDataFrame with {len(gdf_sensors_country)} rows")
             print(f"Created GeoDataFrame with {len(gdf_sensors_country)} locations")
 
@@ -656,6 +684,9 @@ class OpenAQCollector(BaseCollector):
                 self.logger.error("No 'sensors' column in the response data")
                 self.logger.info(f"Available columns: {gdf_sensors_country.columns.tolist()}")
                 print("Error: No sensor data found in API response")
+                profile["status"] = "missing_sensors_column"
+                profile["processing_total_seconds"] = perf_counter() - start_time
+                self.last_sensor_country_profile = profile
                 return pd.DataFrame()
 
             # Debug: Check what sensor data looks like
@@ -664,17 +695,22 @@ class OpenAQCollector(BaseCollector):
 
             # Explode sensors and create new columns
             print("Extracting individual sensors from locations...")
+            explode_start = perf_counter()
             gdf_sensors_exploded = gdf_sensors_country.explode('sensors')
+            profile["explode_seconds"] = perf_counter() - explode_start
+            profile["result_sensors_before_filter"] = len(gdf_sensors_exploded)
             self.logger.info(f"Exploded sensors DataFrame has {len(gdf_sensors_exploded)} rows")
             print(f"Found {len(gdf_sensors_exploded)} individual sensors across all locations")
             
             print("Processing sensor metadata...")
+            sensor_metadata_start = perf_counter()
             gdf_sensors_exploded['sensor_type'] = gdf_sensors_exploded['sensors'].apply(lambda x: x['name'] if isinstance(x, dict) and 'name' in x else None)
             gdf_sensors_exploded['sensor_id'] = gdf_sensors_exploded['sensors'].apply(lambda x: x['id'] if isinstance(x, dict) and 'id' in x else None)
 
             # Clean up
             gdf_sensors_exploded.drop(["sensors", "bounds"], axis=1, inplace=True)
             gdf_sensors_exploded.rename(columns={'id': 'location_id'}, inplace=True)
+            profile["sensor_metadata_seconds"] = perf_counter() - sensor_metadata_start
 
             # Check what sensor types we have
             sensor_types = gdf_sensors_exploded['sensor_type'].unique().tolist()
@@ -685,16 +721,26 @@ class OpenAQCollector(BaseCollector):
             if indicators:
                 print(f"Filtering for sensors matching indicators: {indicators}")
                 # Use a more flexible match for PM2.5 or other indicators
+                filter_start = perf_counter()
                 mask = gdf_sensors_exploded['sensor_type'].str.contains('|'.join([i.lower() for i in indicators]), case=False)
                 gdf_sensors_exploded_pm_only = gdf_sensors_exploded[mask]
+                profile["indicator_filter_seconds"] = perf_counter() - filter_start
+                profile["result_sensors_after_filter"] = len(gdf_sensors_exploded_pm_only)
                 self.logger.info(f"Found {len(gdf_sensors_exploded_pm_only)} sensors after filtering for {indicators}")
                 print(f"After filtering: {len(gdf_sensors_exploded_pm_only)} sensors match the indicators")
                 
-                total_time = time.time() - start_time
+                total_time = perf_counter() - start_time
+                profile["processing_total_seconds"] = total_time
+                profile["status"] = "ok"
+                self.last_sensor_country_profile = profile
                 print(f"Sensor processing completed in {self._format_time(total_time)}")
                 return gdf_sensors_exploded_pm_only
             
-            total_time = time.time() - start_time
+            total_time = perf_counter() - start_time
+            profile["result_sensors_after_filter"] = len(gdf_sensors_exploded)
+            profile["processing_total_seconds"] = total_time
+            profile["status"] = "ok"
+            self.last_sensor_country_profile = profile
             print(f"Sensor processing completed in {self._format_time(total_time)}")
             return gdf_sensors_exploded
             
@@ -703,6 +749,10 @@ class OpenAQCollector(BaseCollector):
             import traceback
             self.logger.error(traceback.format_exc())
             print(f"Error fetching sensor data: {str(e)}")
+            profile["status"] = "error"
+            profile["error"] = str(e)
+            profile["processing_total_seconds"] = perf_counter() - start_time
+            self.last_sensor_country_profile = profile
             return pd.DataFrame()
 
     def _process_sensor_batch(self, sensor_batch: List[str], start_date: str, end_date: str) -> List[pd.DataFrame]:

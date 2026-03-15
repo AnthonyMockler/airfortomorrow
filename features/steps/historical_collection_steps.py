@@ -171,6 +171,18 @@ def step_current_run_produces_historical_parquets(context, count: int, label: st
     setattr(context, _selected_parquet_key(label), matches[-1])
 
 
+@then('the current run should produce no more than {count:d} updated historical parquet files for "{label}"')
+def step_current_run_produces_no_more_than_historical_parquets(context, count: int, label: str):
+    matches = _artifact_paths_from_run(context, label)
+    assert len(matches) <= count, (
+        f"Expected no more than {count} updated historical parquet files for {label!r}, "
+        f"found {len(matches)}. Matched files: {[str(path) for path in matches]}"
+    )
+    if matches:
+        setattr(context, _selected_paths_key(label), matches)
+        setattr(context, _selected_parquet_key(label), matches[-1])
+
+
 @then("the current run should create at least {count:d} new log files")
 def step_current_run_creates_new_log_files(context, count: int):
     result = _require_last_result(context)
@@ -311,7 +323,10 @@ def step_latest_historical_parquet_date_range(
 
     start = pd.Timestamp(start_date)
     end = pd.Timestamp(end_date)
-    normalized = parsed.dt.normalize()
+    if getattr(parsed.dt, "tz", None) is not None:
+        normalized = parsed.dt.tz_localize(None).dt.normalize()
+    else:
+        normalized = parsed.dt.normalize()
     below = normalized < start
     above = normalized > end
     out_of_range_count = int((below | above).sum())

@@ -75,10 +75,15 @@ class AirQualityPipeline:
         try:
             if self.mode == "historical":
                 from src.data_processors.s3_historical_data import main as collect_historical
+                years = [self.start_date[:4]]
+                if self.end_date and self.end_date[:4] != self.start_date[:4]:
+                    years.append(self.end_date[:4])
                 sys.argv = [
                     "",
-                    "--years", self.start_date[:4],
+                    "--years", *years,
                     "--country-codes", "111",  # Thailand
+                    "--start-date", self.start_date,
+                    "--end-date", self.end_date,
                     "--output-dir", str(self.raw_dir / "openaq" / "historical")
                 ]
                 collect_historical()

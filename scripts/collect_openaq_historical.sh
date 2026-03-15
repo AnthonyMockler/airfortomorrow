@@ -62,6 +62,8 @@ else
     echo "⚠️  Configuration system unavailable, using hardcoded defaults"
 fi
 
+DEFAULT_TEST_LIMIT="${AIR_QUALITY_TEST_OPENAQ_LIMIT:-5}"
+
 # Default settings (config-driven with fallbacks)
 YEARS=(2023 2024)
 COUNTRY_CODES=("${OPENAQ_CODES[@]}")
@@ -70,6 +72,9 @@ MAX_RETRIES=3
 OUTPUT_DIR="$DEFAULT_OUTPUT_DIR"
 TEST_MODE=false
 TIMEOUT="$DEFAULT_TIMEOUT"
+LOCATION_LIMIT=""
+START_DATE=""
+END_DATE=""
 
 if [[ "${AIR_QUALITY_TEST_MODE:-0}" == "1" ]]; then
     TEST_MODE=true
@@ -82,6 +87,7 @@ log() {
 
 # Print usage information
 usage() {
+    local exit_code="${1:-1}"
     echo "OpenAQ Historical Data Collection Script (Configuration-Aware)"
     echo ""
     echo "This script collects historical air quality data from OpenAQ S3 bucket for Thailand and Laos"
@@ -95,6 +101,9 @@ usage() {
     echo "  -r, --retries N           Maximum number of retries for failed downloads (default: $MAX_RETRIES)"
     echo "  -o, --output-dir DIR      Output directory for downloaded files (default: $OUTPUT_DIR)"
     echo "  --timeout SECONDS         Processing timeout (default: ${TIMEOUT}s)"
+    echo "  --location-limit N        Maximum locations to process in this run (default: unlimited)"
+    echo "  --start-date DATE         Optional start date for filtering historical objects (YYYY-MM-DD)"
+    echo "  --end-date DATE           Optional end date for filtering historical objects (YYYY-MM-DD)"
     echo "  -t, --test                Run in test mode with a small subset of locations"
     echo "  -h, --help                Display this help message"
     echo ""
@@ -110,7 +119,7 @@ usage() {
     echo "  Default output dir: $OUTPUT_DIR"
     echo "  Default timeout: ${TIMEOUT}s"
     echo ""
-    exit 1
+    exit "$exit_code"
 }
 
 # Parse command line arguments
@@ -149,19 +158,41 @@ while [[ $# -gt 0 ]]; do
             TIMEOUT="$2"
             shift 2
             ;;
+        --location-limit)
+            LOCATION_LIMIT="$2"
+            shift 2
+            ;;
+        --start-date)
+            START_DATE="$2"
+            shift 2
+            ;;
+        --end-date)
+            END_DATE="$2"
+            shift 2
+            ;;
         -t|--test)
             TEST_MODE=true
             shift
             ;;
         -h|--help)
-            usage
+            usage 0
             ;;
         *)
             log "Unknown option: $1"
-            usage
+            usage 1
             ;;
     esac
 done
+
+if [[ (-n "$START_DATE" && -z "$END_DATE") || (-z "$START_DATE" && -n "$END_DATE") ]]; then
+    log "ERROR: Both --start-date and --end-date are required when date filtering is enabled"
+    exit 1
+fi
+
+if [[ -n "$START_DATE" && "$END_DATE" < "$START_DATE" ]]; then
+    log "ERROR: --end-date must be on or after --start-date"
+    exit 1
+fi
 
 # Make sure the output directory exists
 mkdir -p "$OUTPUT_DIR"
@@ -173,29 +204,58 @@ COUNTRY_CODES_STR=$(printf "%s " "${COUNTRY_CODES[@]}")
 # Start the collection process
 log "Starting historical OpenAQ data collection"
 if [ "$TEST_MODE" = true ]; then
+    if [[ -z "$LOCATION_LIMIT" ]]; then
+        LOCATION_LIMIT="$DEFAULT_TEST_LIMIT"
+    fi
     log "Running in TEST MODE with a small subset of locations"
     log "Output directory: $OUTPUT_DIR"
+    log "Location limit: $LOCATION_LIMIT"
+    if [[ -n "$START_DATE" ]]; then
+        log "Date window: $START_DATE to $END_DATE"
+    fi
     
     # Run the test script with limited parameters
-    python3 src/data_processors/s3_historical_data.py \
-        --years 2024 \
-        --country-codes 111 \
-        --max-workers 2 \
-        --max-retries $MAX_RETRIES \
-        --output-dir "$OUTPUT_DIR" 2>&1 | tee -a "$LOG_FILE"
+    PYTHON_CMD=(
+        python3 src/data_processors/s3_historical_data.py
+        --years 2024
+        --country-codes 111
+        --max-workers 2
+        --max-retries "$MAX_RETRIES"
+        --location-limit "$LOCATION_LIMIT"
+        --output-dir "$OUTPUT_DIR"
+    )
+    if [[ -n "$START_DATE" ]]; then
+        PYTHON_CMD+=(--start-date "$START_DATE" --end-date "$END_DATE")
+    fi
+    "${PYTHON_CMD[@]}" 2>&1 | tee -a "$LOG_FILE"
 else
     log "Years: ${YEARS_STR}"
     log "Country codes: ${COUNTRY_CODES_STR}"
     log "Maximum workers: $MAX_WORKERS"
     log "Output directory: $OUTPUT_DIR"
-    
-    # Run the Python script
-    python3 src/data_processors/s3_historical_data.py \
-        --years $YEARS_STR \
-        --country-codes $COUNTRY_CODES_STR \
-        --max-workers $MAX_WORKERS \
-        --max-retries $MAX_RETRIES \
-        --output-dir "$OUTPUT_DIR" 2>&1 | tee -a "$LOG_FILE"
+    if [[ -n "$LOCATION_LIMIT" ]]; then
+        log "Location limit: $LOCATION_LIMIT"
+    fi
+    if [[ -n "$START_DATE" ]]; then
+        log "Date window: $START_DATE to $END_DATE"
+    fi
+
+    PYTHON_CMD=(
+        python3 src/data_processors/s3_historical_data.py
+        --years "${YEARS[@]}"
+        --country-codes "${COUNTRY_CODES[@]}"
+        --max-workers "$MAX_WORKERS"
+        --max-retries "$MAX_RETRIES"
+        --output-dir "$OUTPUT_DIR"
+    )
+    if [[ -n "$LOCATION_LIMIT" ]]; then
+        PYTHON_CMD+=(--location-limit "$LOCATION_LIMIT")
+    fi
+    if [[ -n "$START_DATE" ]]; then
+        PYTHON_CMD+=(--start-date "$START_DATE" --end-date "$END_DATE")
+    fi
+
+    "${PYTHON_CMD[@]}" 2>&1 | tee -a "$LOG_FILE"
 fi
 
 # Check if the script succeeded

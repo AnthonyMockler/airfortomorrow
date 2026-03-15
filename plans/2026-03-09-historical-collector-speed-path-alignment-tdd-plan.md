@@ -204,6 +204,46 @@ User-directed execution order update:
   - The first safe H3 optimization win was eliminating temporary GeoTIFF disk I/O.
   - The next likely Himawari H3 target is boundary reuse/caching or multi-file orchestration rather than `raster_to_dataframe(...)`.
 
+### Himawari Boundary Cache Optimization
+
+- Optimization applied:
+  - `src/utils/boundary_utils.py` now caches raw geoBoundaries country GeoJSON files locally under `data/cache/boundaries/raw/` and reloads them on subsequent runs.
+  - The buffer and unary-union logic is unchanged, so the masking geometry semantics remain aligned with the prior implementation.
+- Verification:
+  - Reused the same representative-file contract:
+    - `./scripts/run_tests.sh -- tests/test_himawari_h3_single_file_profile.py -q -s`
+  - Warm-cache population run: `2 passed, 2 warnings in 8.55s`
+  - Cached steady-state run: `2 passed, 2 warnings in 6.71s`
+- Before/after representative-file timings:
+  - `boundary_creation`: `2.426s` -> `1.682s`
+  - `full_total`: `7.132s` -> `6.038s`
+- Output safety:
+  - The representative-file contract still matched the checked-in expected artifact on schema, row count, sorted H3 keys, metadata columns, and `aod_value` values.
+- Conclusion:
+  - Boundary caching is a valid next optimization after the in-memory raster path, especially for iterative local runs and repeated test execution.
+  - The next Himawari target should now shift toward multi-file orchestration or integrated-run profiling rather than more single-file setup work.
+
+### Himawari Historical Bounded Rerun After H3 Optimizations
+
+- Verification command:
+  - `./scripts/run_behave_tests_compact.sh --tags=@slow features/contracts/historical_collection_contract.feature:50`
+- Result:
+  - `PASS`
+  - `Runtime: Took 9m18.957s`
+  - Raw compact log: `/var/folders/gv/_b6pxv9j6k50mxj4c6blq3040000gn/T/airfortomorrow-behave-20260309-185949.log`
+- Current step breakdown from the latest Himawari logs:
+  - Step 1 integrated pipeline: `11:59:51` -> `12:02:17` (`~2m26s`)
+  - Step 2 daily aggregation: `12:02:17` -> `12:07:14` (`~4m57s`)
+  - Step 3 IDW interpolation: `12:07:14` -> `12:09:08` (`~1m54s`)
+- Comparison against the earlier bounded historical run:
+  - Previous full runtime: `29m40.319s`
+  - Current full runtime: `9m18.957s`
+  - Previous Step 1: `~20m51s`
+  - Current Step 1: `~2m26s`
+- Main finding:
+  - The biggest improvement is in Step 1 (`download + H3 processing`), which dropped by roughly `18m25s`.
+  - Aggregation and interpolation still take meaningful time, but they are no longer the dominant cost on this bounded historical slice.
+
 ## Handoff
 
 - Immediate next investigation slice: Himawari H3 indexing profiling on a single real NetCDF file.
