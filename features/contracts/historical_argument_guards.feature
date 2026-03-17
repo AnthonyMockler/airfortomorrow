@@ -2,6 +2,7 @@
 Feature: Historical Mode Required Argument Guards
   Historical mode scripts should fail fast when start/end dates are missing.
 
+  @tier_a
   Scenario Outline: Historical command fails without required dates
     When I run "<command>" with timeout 45
     Then the command should fail

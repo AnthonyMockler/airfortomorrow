@@ -2,27 +2,31 @@
 Feature: Himawari realtime collector and processor contract
   Protect Himawari realtime CLI and output-data contracts used by pipeline wrappers.
 
+  @tier_a
   Scenario: Himawari integrated wrapper exposes expected CLI options
     When I run "./scripts/run_himawari_integrated_pipeline.sh --help"
     Then the command exit code should be one of "0,1"
     And the command output should include Himawari CLI options "--mode,--hours,--countries,--start-date,--end-date,--skip-download,--skip-h3,--skip-aggregation,--skip-interpolation,--force-download,--download-workers,--timeout,--help"
 
+  @tier_a
   Scenario: Himawari integrated Python entrypoint exposes expected CLI options
     When I run "python src/himawari_integrated_pipeline.py --help"
     Then the command should succeed
     And the command output should include Himawari CLI options "--mode,--hours,--countries,--skip-download,--skip-h3,--force-download,--download-workers,--help"
 
+  @tier_a
   Scenario: Himawari realtime collector Python entrypoint exposes expected CLI options
     When I run "python src/data_collectors/himawari_aod.py --help"
     Then the command should succeed
     And the command output should include Himawari CLI options "--mode,--hours,--download-only,--transform-only,--skip-if-h3-exists,--download-workers,--help"
 
+  @tier_a
   Scenario: Himawari IDW entrypoint exposes boundary cache options
     When I run "python src/data_processors/himawari_idw_interpolator.py --help"
     Then the command should succeed
     And the command output should include Himawari CLI options "--mode,--input-dir,--output-dir,--countries,--rings,--weight-power,--buffer-degrees,--boundary-cache-dir,--refresh-boundary-cache,--help"
 
-  @live @slow
+  @tier_c @live @slow
   Scenario: Himawari realtime integrated run produces fresh, useful output artifacts
     Given I clean the "data/raw/himawari" directory while preserving git-tracked files
     And I clean the "data/processed/himawari" directory while preserving git-tracked files

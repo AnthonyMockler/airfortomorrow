@@ -5,18 +5,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
     cat <<'EOF'
-Run smoke tests for the Docker test harness.
+Run Tier A smoke scenarios through the compact Behave runner.
 
 Usage:
-  ./scripts/smoke_test.sh [behave args...]
+  ./scripts/smoke_test.sh [compact runner options...]
 
 Examples:
   ./scripts/smoke_test.sh
-  ./scripts/smoke_test.sh --tags=@smoke
+  ./scripts/smoke_test.sh --build
+  ./scripts/smoke_test.sh --image airquality-app:test
 
 Behavior:
-  - Host environment: force Docker image rebuild, then run Behave @smoke tests in container.
-  - Inside Docker: run Behave @smoke tests directly (no nested Docker needed).
+  - Runs only scenarios tagged as Tier A + @smoke.
+  - Delegates to ./scripts/run_behave_tests_compact.sh.
 EOF
 }
 
@@ -25,9 +26,4 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     exit 0
 fi
 
-if [[ "${AIR_QUALITY_TEST_IN_DOCKER:-}" == "1" || -f /.dockerenv ]]; then
-    exec "$SCRIPT_DIR/run_behave_tests.sh" --inside --tags=@smoke "$@"
-fi
-
-# Host mode: force a Docker build, then run smoke tests inside the image.
-exec "$SCRIPT_DIR/run_behave_tests.sh" --build -- --tags=@smoke "$@"
+exec "$SCRIPT_DIR/run_behave_tests_compact.sh" --tier a --scope smoke "$@"

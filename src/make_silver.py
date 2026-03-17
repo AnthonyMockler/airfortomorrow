@@ -36,6 +36,20 @@ from src.utils.logging_utils import setup_with_config
 from src.utils.boundary_utils import create_country_boundaries
 
 
+def _resolve_preferred_tabular_file(base_dir: Path, stem: str) -> Optional[Path]:
+    for suffix in ("parquet", "csv"):
+        candidate = base_dir / f"{stem}.{suffix}"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _read_tabular_file(path: Path) -> pl.DataFrame:
+    if path.suffix == ".parquet":
+        return pl.read_parquet(path)
+    return pl.read_csv(path)
+
+
 def create_date_dimension(start: date, end: date) -> pl.DataFrame:
     """
     Create a DataFrame containing a date column and extracts year, month, and day from each date.
@@ -1042,20 +1056,27 @@ def clean_elevation_data(
                 "elevation": pl.Series([], dtype=pl.Float64)
             }).lazy()
             
-        # Load elevation data using config path
-        elevation_file = config_loader.get_path('assets.dem') / "LAO_THA_elevation.csv"
-        if not elevation_file.exists():
-            logger.warning(f"Elevation file not found: {elevation_file}")
+        # Load elevation data using config path, preferring parquet.
+        elevation_file = _resolve_preferred_tabular_file(
+            config_loader.get_path('assets.dem'),
+            "LAO_THA_elevation",
+        )
+        if elevation_file is None:
+            missing_parquet = config_loader.get_path('assets.dem') / "LAO_THA_elevation.parquet"
+            missing_csv = config_loader.get_path('assets.dem') / "LAO_THA_elevation.csv"
+            logger.warning(
+                f"Elevation file not found (checked {missing_parquet} and {missing_csv})"
+            )
             return "no_data", pl.DataFrame({
                 "cell": pl.Series([], dtype=pl.UInt64),
                 "elevation": pl.Series([], dtype=pl.Float64)
             }).lazy()
             
         # Read and process elevation data
-        elevation_df = pl.read_csv(elevation_file).with_columns([
+        elevation_df = _read_tabular_file(elevation_file).with_columns([
             pl.col("cell").cast(pl.UInt64),
             pl.col("elevation").cast(pl.Float64)
-        ]).drop(["hex_id", ""])  # Drop unnecessary columns as in original implementation
+        ]).select(["cell", "elevation"])
         
         # CRITICAL: Remove duplicates to prevent row multiplication in joins
         initial_count = elevation_df.shape[0]
@@ -1065,7 +1086,9 @@ def clean_elevation_data(
         if initial_count != final_count:
             logger.warning(f"Removed {initial_count - final_count} duplicate cells from elevation data!")
         
-        logger.info(f"Loaded {elevation_df.shape[0]} unique elevation records")
+        logger.info(
+            f"Loaded {elevation_df.shape[0]} unique elevation records from {elevation_file.name}"
+        )
         return "success", elevation_df.lazy()
         
     except Exception as e:
@@ -1114,10 +1137,17 @@ def clean_landcover_data(
                 "water": pl.Series([], dtype=pl.Float64)
             }).lazy()
             
-        # Load landcover data using config path
-        landcover_file = config_loader.get_path('assets.landcover') / "LAO_THA_landcover.csv"
-        if not landcover_file.exists():
-            logger.warning(f"Landcover file not found: {landcover_file}")
+        # Load landcover data using config path, preferring parquet.
+        landcover_file = _resolve_preferred_tabular_file(
+            config_loader.get_path('assets.landcover'),
+            "LAO_THA_landcover",
+        )
+        if landcover_file is None:
+            missing_parquet = config_loader.get_path('assets.landcover') / "LAO_THA_landcover.parquet"
+            missing_csv = config_loader.get_path('assets.landcover') / "LAO_THA_landcover.csv"
+            logger.warning(
+                f"Landcover file not found (checked {missing_parquet} and {missing_csv})"
+            )
             return "no_data", pl.DataFrame({
                 "cell": pl.Series([], dtype=pl.UInt64),
                 "trees": pl.Series([], dtype=pl.Float64),
@@ -1132,7 +1162,7 @@ def clean_landcover_data(
             }).lazy()
             
         # Read and process landcover data
-        landcover_df = pl.read_csv(landcover_file).with_columns([
+        landcover_df = _read_tabular_file(landcover_file).with_columns([
             pl.col("cell").cast(pl.UInt64),
             pl.col("trees").cast(pl.Float64),
             pl.col("grass").cast(pl.Float64),
@@ -1156,7 +1186,9 @@ def clean_landcover_data(
         if initial_count != final_count:
             logger.warning(f"Removed {initial_count - final_count} duplicate cells from landcover data!")
         
-        logger.info(f"Loaded {landcover_df.shape[0]} unique landcover records")
+        logger.info(
+            f"Loaded {landcover_df.shape[0]} unique landcover records from {landcover_file.name}"
+        )
         return "success", landcover_df.lazy()
         
     except Exception as e:
@@ -1205,17 +1237,24 @@ def clean_worldpop_data(
                 "worldpop_population": pl.Series([], dtype=pl.Float64)
             }).lazy()
             
-        # Load WorldPop data using config path
-        worldpop_file = config_loader.get_path('assets.worldpop') / "LAO_THA_worldpop_h3_08.csv"
-        if not worldpop_file.exists():
-            logger.warning(f"WorldPop file not found: {worldpop_file}")
+        # Load WorldPop data using config path, preferring parquet.
+        worldpop_file = _resolve_preferred_tabular_file(
+            config_loader.get_path('assets.worldpop'),
+            "LAO_THA_worldpop_h3_08",
+        )
+        if worldpop_file is None:
+            missing_parquet = config_loader.get_path('assets.worldpop') / "LAO_THA_worldpop_h3_08.parquet"
+            missing_csv = config_loader.get_path('assets.worldpop') / "LAO_THA_worldpop_h3_08.csv"
+            logger.warning(
+                f"WorldPop file not found (checked {missing_parquet} and {missing_csv})"
+            )
             return "no_data", pl.DataFrame({
                 "cell": pl.Series([], dtype=pl.UInt64),
                 "worldpop_population": pl.Series([], dtype=pl.Float64)
             }).lazy()
             
         # Read and process WorldPop data
-        worldpop_df = pl.read_csv(worldpop_file)
+        worldpop_df = _read_tabular_file(worldpop_file)
         
         # Check if we need to convert h3_08 to cell
         if "h3_08" in worldpop_df.columns:
@@ -1238,7 +1277,9 @@ def clean_worldpop_data(
         if initial_count != final_count:
             logger.warning(f"Removed {initial_count - final_count} duplicate cells from WorldPop data!")
         
-        logger.info(f"Loaded {worldpop_df.shape[0]} unique WorldPop records")
+        logger.info(
+            f"Loaded {worldpop_df.shape[0]} unique WorldPop records from {worldpop_file.name}"
+        )
         return "success", worldpop_df.lazy()
         
     except Exception as e:

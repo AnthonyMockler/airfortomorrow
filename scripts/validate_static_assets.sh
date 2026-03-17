@@ -10,7 +10,7 @@ VALIDATOR_ARGS=()
 
 usage() {
     cat <<'EOF'
-Validate static/bootstrap CSV assets against the AQ pipeline loader contracts.
+Validate static/bootstrap parquet/CSV assets against the AQ pipeline loader contracts.
 
 Usage:
   ./scripts/validate_static_assets.sh [--build] [--image <name>] [validator args...]
@@ -27,7 +27,16 @@ Options:
 EOF
 }
 
+require_inside_docker() {
+    if [[ ! -f /.dockerenv ]]; then
+        echo "Error: --inside is restricted to Docker containers." >&2
+        echo "Run ./scripts/validate_static_assets.sh from host and let the wrapper launch Docker." >&2
+        exit 1
+    fi
+}
+
 run_inside() {
+    require_inside_docker
     cd "$BASE_DIR"
     export PYTHONPATH="$BASE_DIR/src:${PYTHONPATH:-}"
     exec python "$BASE_DIR/src/validate_static_assets.py" "${VALIDATOR_ARGS[@]}"
@@ -63,7 +72,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "${AIR_QUALITY_TEST_IN_DOCKER:-}" == "1" ]]; then
+if [[ -f /.dockerenv ]]; then
     run_inside
 fi
 

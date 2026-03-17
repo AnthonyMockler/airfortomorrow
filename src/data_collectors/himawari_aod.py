@@ -493,12 +493,34 @@ def _download_day_batch_with_connection(ftp_conn, batch, output_dir, logger):
 
         for hourly_file in batch.hourly_files:
             target_file_path = os.path.join(local_dir, hourly_file)
+            tmp_target_path = f"{target_file_path}.part"
             try:
-                with open(target_file_path, "wb") as local_file:
+                # Download to a temporary file first so partial/failed writes
+                # never appear as final NetCDF artifacts.
+                if os.path.exists(tmp_target_path):
+                    os.remove(tmp_target_path)
+
+                with open(tmp_target_path, "wb") as local_file:
                     ftp_conn.retrbinary(f"RETR {hourly_file}", local_file.write)
+
+                file_size = os.path.getsize(tmp_target_path)
+                if file_size <= 0:
+                    logger.warning(
+                        f"Discarding empty file for {batch.day_path}/{hourly_file}"
+                    )
+                    os.remove(tmp_target_path)
+                    continue
+
+                os.replace(tmp_target_path, target_file_path)
                 downloaded_files.append((batch.month, batch.day, hourly_file))
                 logger.info(f"Downloaded {batch.day_path}/{hourly_file}")
             except Exception as file_error:
+                # Ensure no partial/empty file is left behind after any error.
+                if os.path.exists(tmp_target_path):
+                    try:
+                        os.remove(tmp_target_path)
+                    except OSError:
+                        pass
                 logger.error(
                     f"Error downloading {batch.day_path}/{hourly_file}: {file_error}"
                 )

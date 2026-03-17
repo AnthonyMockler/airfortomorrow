@@ -41,16 +41,19 @@ Air for Tomorrow predicts PM2.5 on an H3 grid using ground sensors (OpenAQ, AirG
 
 ## Test Commands
 
-- Behave default: `./scripts/run_behave_tests_compact.sh`
-- Behave raw output/debug: `./scripts/run_behave_tests.sh`
+- Behave default (Tier A): `./scripts/run_behave_tests_compact.sh --tier a`
+- Behave Tier B (live, non-slow): `./scripts/run_behave_tests_compact.sh --tier b`
+- Behave Tier C (slow): `./scripts/run_behave_tests_compact.sh --tier c`
+- Behave all tiers (A then B then C): `./scripts/run_behave_tests_compact.sh --tier all`
+- Behave raw output/debug: `./scripts/run_behave_tests.sh` only when full raw output is explicitly needed.
 - pytest: `./scripts/run_tests.sh` (do not run pytest directly on host)
 - smoke: `./scripts/smoke_test.sh`
-- Default Behave should exclude `@slow` and `@live` unless explicitly needed.
+- Tier runs must not rely on ad-hoc tag forwarding.
 
 ## Long-Run Commands (10+ min expected)
 
 - Start once and record log path.
-- Prefer `./scripts/run_behave_tests_compact.sh --long-run ...` for slow Behave runs.
+- Prefer `./scripts/run_behave_tests_compact.sh --tier c --long-run` for slow Behave runs.
 - Do not poll/tail/status-update more often than every 5 to 10 minutes unless run state materially changes.
 
 ## Minimal Plan Template (only when needed)

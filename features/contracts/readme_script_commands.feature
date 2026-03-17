@@ -2,6 +2,7 @@
   Feature: README Script Command Contract
   README script commands should expose a usable help interface.
 
+  @tier_a
   Scenario Outline: Script command help returns usage text without unknown option errors
     When I run "<command>" with timeout 45
     Then the command exit code should be one of "0,1"

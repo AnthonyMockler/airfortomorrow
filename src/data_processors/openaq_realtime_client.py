@@ -9,6 +9,7 @@ It fetches data for each location for the past 2 days by default.
 import time
 import argparse
 import os
+import sys
 from datetime import datetime, timedelta
 import pandas as pd
 from pandas import json_normalize
@@ -369,6 +370,43 @@ def get_sensors_data(sensor_list, from_date, to_date, gateway: SharedRateAwareOp
 
     return df_concat_hourly_data
 
+
+def fetch_sensors_with_retry(
+    collector: OpenAQCollector,
+    max_attempts: int,
+    retry_delay_seconds: float,
+) -> pd.DataFrame:
+    """Fetch OpenAQ sensors with bounded retries for transient network/API failures."""
+    attempts = max(1, max_attempts)
+    delay_seconds = max(0.0, retry_delay_seconds)
+
+    last_result = pd.DataFrame()
+    for attempt in range(1, attempts + 1):
+        last_result = collector._get_sensors_country()
+        if not last_result.empty:
+            return last_result
+
+        profile = getattr(collector, "last_sensor_country_profile", {}) or {}
+        status = profile.get("status", "unknown")
+        error = profile.get("error")
+
+        if attempt < attempts:
+            message = (
+                "OpenAQ sensor discovery returned no sensors "
+                f"(status={status}"
+            )
+            if error:
+                message += f", error={error}"
+            message += (
+                f"). Retrying in {delay_seconds:.1f}s "
+                f"({attempt}/{attempts})..."
+            )
+            print(message)
+            if delay_seconds > 0:
+                time.sleep(delay_seconds)
+
+    return last_result
+
 def main():
     parser = argparse.ArgumentParser(description="Collect real-time data from OpenAQ")
     parser.add_argument("--days", type=int, default=2,
@@ -384,6 +422,8 @@ def main():
     parser.add_argument("--test-limit", type=int, default=int(os.getenv("AIR_QUALITY_TEST_OPENAQ_LIMIT", "5")),
                         help="Maximum locations processed in test mode (default: AIR_QUALITY_TEST_OPENAQ_LIMIT or 5)")
     args = parser.parse_args()
+    sensor_fetch_attempts = int(os.getenv("AIR_QUALITY_OPENAQ_SENSOR_FETCH_ATTEMPTS", "3"))
+    sensor_fetch_retry_seconds = float(os.getenv("AIR_QUALITY_OPENAQ_SENSOR_FETCH_RETRY_SECONDS", "5"))
 
     test_mode = args.test_mode or os.getenv("AIR_QUALITY_TEST_MODE") == "1"
     if test_mode:
@@ -419,19 +459,33 @@ def main():
     
     # Get sensor data through the collector
     print("\nFetching sensor data...")
-    gdf_sensors = collector._get_sensors_country()
+    gdf_sensors = fetch_sensors_with_retry(
+        collector=collector,
+        max_attempts=sensor_fetch_attempts,
+        retry_delay_seconds=sensor_fetch_retry_seconds,
+    )
     
     if gdf_sensors.empty:
         print("Error: No sensor data found")
-        return
+        profile = getattr(collector, "last_sensor_country_profile", {}) or {}
+        if profile:
+            print(
+                "Sensor discovery profile: "
+                f"status={profile.get('status', 'unknown')}, "
+                f"locations={profile.get('result_locations', 0)}, "
+                f"sensors_after_filter={profile.get('result_sensors_after_filter', 0)}"
+            )
+            if profile.get("error"):
+                print(f"Sensor discovery error: {profile['error']}")
+        return 1
     
     # Filter sensors by location if specified
     if args.locations:
         print(f"\nFiltering for {len(args.locations)} specified locations: {args.locations}")
         gdf_sensors = gdf_sensors[gdf_sensors['location_id'].isin(args.locations)]
         if gdf_sensors.empty:
-            print("No sensors found for the specified locations.")
-            return
+            print("Error: No sensors found for the specified locations.")
+            return 1
     
     # Get unique locations and limit if needed
     locations = gdf_sensors['location_id'].unique()
@@ -445,6 +499,9 @@ def main():
     # Get unique sensor IDs
     sensor_list = gdf_sensors['sensor_id'].astype(str).unique().tolist()
     print(f"Found {len(sensor_list)} unique sensors from {len(locations)} locations")
+    if not sensor_list:
+        print("Error: Sensor list is empty after filtering.")
+        return 1
     
     # Start timer
     start_time = time.time()
@@ -514,10 +571,19 @@ def main():
         parquet_file = output_dir / f"openaq_realtime_{countries_str}_from_{from_date_str}_to_{to_date_str}.parquet"
         
         print(f"\nSaving data to {parquet_file}")
-        df_data.to_parquet(parquet_file, index=False)
+        try:
+            df_data.to_parquet(parquet_file, index=False)
+        except Exception as exc:
+            print(f"Error: Failed to write parquet output: {exc}")
+            return 1
+        if not parquet_file.exists() or parquet_file.stat().st_size <= 0:
+            print(f"Error: Parquet output was not created correctly: {parquet_file}")
+            return 1
         print("Data saved successfully!")
+        return 0
     else:
-        print("No data collected!")
+        print("Error: No data collected!")
+        return 1
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(main())

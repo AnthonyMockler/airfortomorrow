@@ -51,7 +51,7 @@ def create_boundaries_countries(country_code_list, buffer_degrees=0.4):
 
 def load_historical_data(data_dir='data/raw/firms/historical'):
     """
-    Load historical FIRMS data from CSV files in the historical directory,
+    Load historical FIRMS data from parquet/CSV files in the historical directory,
     separating VIIRS and MODIS data based on filenames.
     
     Args:
@@ -62,16 +62,27 @@ def load_historical_data(data_dir='data/raw/firms/historical'):
     """
     print("Loading historical FIRMS data...")
     
-    # Find all CSV files in the historical directory
+    # Find all parquet/CSV files in the historical directory (prefer parquet if present).
+    parquet_files = glob.glob(os.path.join(data_dir, '*.parquet'))
     csv_files = glob.glob(os.path.join(data_dir, '*.csv'))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in {data_dir}")
+    if parquet_files:
+        data_files = parquet_files
+        preferred_format = "parquet"
+    else:
+        data_files = csv_files
+        preferred_format = "CSV"
+
+    if not data_files:
+        raise FileNotFoundError(f"No historical FIRMS parquet/CSV files found in {data_dir}")
     
     # Separate files into VIIRS and MODIS based on filename
-    viirs_files = [f for f in csv_files if 'J1V' in f or 'J2V' in f or 'SV-' in f]
-    modis_files = [f for f in csv_files if 'M-' in f]
-    
-    print(f"Found {len(viirs_files)} VIIRS files and {len(modis_files)} MODIS files")
+    viirs_files = [f for f in data_files if 'J1V' in f or 'J2V' in f or 'SV-' in f]
+    modis_files = [f for f in data_files if 'M-' in f]
+
+    print(
+        f"Found {len(viirs_files)} VIIRS files and {len(modis_files)} MODIS files "
+        f"(format: {preferred_format})"
+    )
     
     # Function to load and process a list of files
     def process_files(file_list, data_type):
@@ -80,17 +91,21 @@ def load_historical_data(data_dir='data/raw/firms/historical'):
         
         for file_path in file_list:
             try:
-                df = pd.read_csv(file_path)
+                if file_path.lower().endswith(".parquet"):
+                    df = pd.read_parquet(file_path)
+                else:
+                    df = pd.read_csv(file_path)
                 
                 # Handle different date formats
-                try:
-                    df['acq_date'] = pd.to_datetime(df['acq_date'], format='%Y-%m-%d')
-                except:
+                if not pd.api.types.is_datetime64_any_dtype(df['acq_date']):
                     try:
-                        df['acq_date'] = pd.to_datetime(df['acq_date'], format='%Y%m%d')
+                        df['acq_date'] = pd.to_datetime(df['acq_date'], format='%Y-%m-%d')
                     except:
-                        print(f"Warning: Could not parse dates in {file_path}")
-                        continue
+                        try:
+                            df['acq_date'] = pd.to_datetime(df['acq_date'], format='%Y%m%d')
+                        except:
+                            print(f"Warning: Could not parse dates in {file_path}")
+                            continue
                 
                 # Select relevant columns
                 df_selected = df[['latitude', 'longitude', 'acq_date', 'acq_time', 'frp', 'instrument']]

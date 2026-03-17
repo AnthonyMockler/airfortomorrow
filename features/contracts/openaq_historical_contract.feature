@@ -2,12 +2,13 @@
 Feature: OpenAQ historical collector contract
   Protect the bounded historical OpenAQ collector path used for optimization work.
 
+  @tier_a
   Scenario: collect_openaq_historical script exposes bounded historical CLI options
     When I run "./scripts/collect_openaq_historical.sh --help" with timeout 60
     Then the command should succeed
     And the command output should include CLI options "--years,--country-codes,--workers,--retries,--output-dir,--timeout,--location-limit,--start-date,--end-date,--test,--help"
 
-  @live
+  @tier_b @live
   Scenario: bounded historical OpenAQ collection with date window produces usable raw parquet data
     Given I clean the "data/raw/openaq/historical" directory while preserving git-tracked files
     When I run "./scripts/collect_openaq_historical.sh --years 2024 --country-codes 111 --workers 2 --location-limit 5 --start-date 2024-01-01 --end-date 2024-02-01" with timeout 2400

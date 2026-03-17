@@ -132,7 +132,12 @@ def step_temp_workspace_env_contains_required_keys(context):
 @given('I clean the "{path}" directory while preserving git-tracked files')
 def step_clean_directory_preserving_tracked(context, path: str):
     root = _resolve_path(context, path)
-    assert root.exists(), f"Directory does not exist: {root}"
+    # Treat missing directories as an empty workspace and create them so the
+    # cleanup contract is idempotent across scenario ordering.
+    if not root.exists():
+        root.mkdir(parents=True, exist_ok=True)
+        return
+
     assert root.is_dir(), f"Path is not a directory: {root}"
 
     for file_path in root.rglob("*"):

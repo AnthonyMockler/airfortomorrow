@@ -27,7 +27,16 @@ Options:
 EOF
 }
 
+require_inside_docker() {
+    if [[ ! -f /.dockerenv ]]; then
+        echo "Error: --inside is restricted to Docker containers." >&2
+        echo "Run ./scripts/run_tests.sh from host and let the wrapper launch Docker." >&2
+        exit 1
+    fi
+}
+
 if [[ "${1:-}" == "--inside" ]]; then
+    require_inside_docker
     shift
     cd "$BASE_DIR"
     export PYTHONPATH="$BASE_DIR/src:${PYTHONPATH:-}"

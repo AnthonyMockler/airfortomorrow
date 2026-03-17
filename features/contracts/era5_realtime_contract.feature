@@ -2,17 +2,19 @@
 Feature: ERA5 realtime collector contract
   Protect ERA5 realtime CLI and output-data contracts used by pipeline wrappers.
 
+  @tier_a
   Scenario: run_era5_idw_pipeline script exposes expected CLI options
     When I run "./scripts/run_era5_idw_pipeline.sh --help" with timeout 60
     Then the command should succeed
     And the command output should include ERA5 CLI options "--mode,--hours,--countries,--params,--idw-rings,--idw-weight-power,--timeout,--force,--help"
 
+  @tier_a
   Scenario: ERA5 integrated Python entrypoint exposes expected CLI options
     When I run "python -m src.era5_integrated_pipeline_idw --help" with timeout 60
     Then the command should succeed
     And the command output should include ERA5 CLI options "--mode,--start-date,--end-date,--hours,--params,--countries,--idw-rings,--idw-weight-power,--output-dir,--raw-data-dir,--force,--log-level"
 
-  @live @benchmark
+  @tier_b @live @benchmark
   Scenario: ERA5-only realtime run produces fresh, useful parquet output
     Given I clean the "data" directory while preserving git-tracked files
     When I run "./scripts/run_era5_idw_pipeline.sh --mode realtime --hours 24 --countries THA --params 2t --idw-rings 8 --idw-weight-power 1.5 --force --timeout 2400" with timeout 2600

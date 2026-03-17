@@ -2,6 +2,7 @@
 Feature: Setup Script Smoke
   Ensure setup can prepare the runtime environment successfully.
 
+  @tier_a
   Scenario: setup.sh completes with success markers
     When I run "./scripts/setup.sh" with timeout 180
     Then the command should succeed

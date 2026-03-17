@@ -2,6 +2,7 @@
 Feature: Historical collection contract
   Protect the documented historical collector workflows used for bounded real-data runs.
 
+  @tier_a
   Scenario: Documentation preserves the historical collection workflow
     Given the file "README.md" should exist
     Then the file "README.md" should contain "./scripts/run_complete_pipeline.sh --mode historical --start-date 2024-06-01 --end-date 2024-06-03 --countries THA LAO --generate-maps"
@@ -10,7 +11,7 @@ Feature: Historical collection contract
     And the file "DOCUMENTATION.md" should contain "./scripts/run_firms_pipeline.sh --mode historical"
     And the file "DOCUMENTATION.md" should contain "./scripts/run_himawari_integrated_pipeline.sh --mode historical"
 
-  @live @airquality
+  @tier_b @live @airquality
   Scenario: Air Quality historical integrated run produces fresh plausible output
     Given I prepare the historical collection workspace for "air_quality"
     When I run "./scripts/run_air_quality_integrated_pipeline.sh --mode historical --start-date 2026-01-01 --end-date 2026-01-03 --countries THA" with timeout 5400
@@ -29,7 +30,7 @@ Feature: Historical collection contract
     And the latest updated historical parquet for "air_quality" should have at least 3 unique values in column "location_id"
     And the latest updated historical parquet for "air_quality" should have date values in column "date_utc" within "2026-01-01" and "2026-01-03"
 
-  @live @firms
+  @tier_b @live @firms
   Scenario: FIRMS historical pipeline produces fresh plausible H3 output
     Given I prepare the historical collection workspace for "firms"
     When I run "./scripts/run_firms_pipeline.sh --mode historical --start-date 2025-01-01 --end-date 2025-01-03 --countries THA" with timeout 5400
@@ -46,7 +47,7 @@ Feature: Historical collection contract
     And the latest updated historical parquet for "firms_h3" should have at least 50 unique values in column "h3_08_text"
     And the latest updated historical parquet for "firms_h3" should have at least 2 unique values in column "value"
 
-  @live @himawari @slow
+  @tier_c @live @himawari @slow
   Scenario: Himawari historical integrated run produces fresh plausible outputs
     Given I prepare the historical collection workspace for "himawari"
     When I run "./scripts/run_himawari_integrated_pipeline.sh --mode historical --start-date 2025-01-01 --end-date 2025-01-03 --countries THA" with timeout 7200
@@ -77,7 +78,7 @@ Feature: Historical collection contract
     And the latest updated historical parquet for "himawari_interpolated" should have at least 100 unique values in column "h3_08"
     And the latest updated historical parquet for "himawari_interpolated" should have date values in column "date" within "2025-01-01" and "2025-01-03"
 
-  @live @era5 @slow
+  @tier_c @live @era5 @slow
   Scenario: ERA5 historical IDW run produces fresh plausible output
     Given I prepare the historical collection workspace for "era5"
     When I run "./scripts/run_era5_idw_pipeline.sh --mode historical --start-date 2025-01-01 --end-date 2025-01-03 --countries THA --params 2t --force" with timeout 7200

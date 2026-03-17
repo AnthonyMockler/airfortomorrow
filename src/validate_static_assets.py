@@ -26,9 +26,13 @@ from src.utils.config_loader import ConfigLoader
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "config" / "config.yaml"
 
-ELEVATION_FILE = REPO_ROOT / "assets" / "dem" / "LAO_THA_elevation.csv"
-LANDCOVER_FILE = REPO_ROOT / "assets" / "landcover" / "LAO_THA_landcover.csv"
-WORLDPOP_FILE = REPO_ROOT / "assets" / "worldpop" / "LAO_THA_worldpop_h3_08.csv"
+ELEVATION_STEM = "LAO_THA_elevation"
+LANDCOVER_STEM = "LAO_THA_landcover"
+WORLDPOP_STEM = "LAO_THA_worldpop_h3_08"
+
+DEM_DIR = REPO_ROOT / "assets" / "dem"
+LANDCOVER_DIR = REPO_ROOT / "assets" / "landcover"
+WORLDPOP_DIR = REPO_ROOT / "assets" / "worldpop"
 AIRGRADIENT_SENSOR_FILE = REPO_ROOT / "assets" / "sensor_lists" / "airgradient_sensor_list.csv"
 FIRMS_HISTORICAL_DIR = REPO_ROOT / "data" / "raw" / "firms" / "historical"
 
@@ -43,7 +47,7 @@ class ValidationResult:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Validate that static/bootstrap CSV assets still match the loader "
+            "Validate that static/bootstrap tabular assets still match the loader "
             "contracts used by the AQ pipeline."
         )
     )
@@ -52,11 +56,21 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=500,
         help=(
-            "Number of data rows to sample from large CSVs before running the "
+            "Number of data rows to sample from large tabular files before running the "
             "loader contract checks (default: 500)."
         ),
     )
     return parser.parse_args()
+
+
+def _resolve_preferred_tabular_file(base_dir: Path, stem: str) -> Path:
+    parquet_path = base_dir / f"{stem}.parquet"
+    csv_path = base_dir / f"{stem}.csv"
+    if parquet_path.exists():
+        return parquet_path
+    if csv_path.exists():
+        return csv_path
+    raise FileNotFoundError(f"Missing tabular asset for {stem} in {base_dir}")
 
 
 def _copy_csv_head(source: Path, destination: Path, sample_rows: int) -> None:
@@ -70,6 +84,23 @@ def _copy_csv_head(source: Path, destination: Path, sample_rows: int) -> None:
                 break
 
 
+def _copy_parquet_head(source: Path, destination: Path, sample_rows: int) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    (
+        pl.scan_parquet(source)
+        .head(sample_rows)
+        .collect()
+        .write_parquet(destination, compression="zstd", compression_level=12)
+    )
+
+
+def _copy_tabular_head(source: Path, destination: Path, sample_rows: int) -> None:
+    if source.suffix == ".parquet":
+        _copy_parquet_head(source, destination, sample_rows)
+        return
+    _copy_csv_head(source, destination, sample_rows)
+
+
 def _build_sample_config(temp_root: Path, sample_rows: int) -> Path:
     with CONFIG_PATH.open("r", encoding="utf-8") as config_handle:
         config = yaml.safe_load(config_handle)
@@ -79,9 +110,13 @@ def _build_sample_config(temp_root: Path, sample_rows: int) -> Path:
     landcover_dir = sample_assets_root / "landcover"
     worldpop_dir = sample_assets_root / "worldpop"
 
-    _copy_csv_head(ELEVATION_FILE, dem_dir / ELEVATION_FILE.name, sample_rows)
-    _copy_csv_head(LANDCOVER_FILE, landcover_dir / LANDCOVER_FILE.name, sample_rows)
-    _copy_csv_head(WORLDPOP_FILE, worldpop_dir / WORLDPOP_FILE.name, sample_rows)
+    elevation_source = _resolve_preferred_tabular_file(DEM_DIR, ELEVATION_STEM)
+    landcover_source = _resolve_preferred_tabular_file(LANDCOVER_DIR, LANDCOVER_STEM)
+    worldpop_source = _resolve_preferred_tabular_file(WORLDPOP_DIR, WORLDPOP_STEM)
+
+    _copy_tabular_head(elevation_source, dem_dir / elevation_source.name, sample_rows)
+    _copy_tabular_head(landcover_source, landcover_dir / landcover_source.name, sample_rows)
+    _copy_tabular_head(worldpop_source, worldpop_dir / worldpop_source.name, sample_rows)
 
     config["paths"]["assets"]["dem"] = str(dem_dir)
     config["paths"]["assets"]["landcover"] = str(landcover_dir)
@@ -206,12 +241,14 @@ def _validate_firms_historical_samples(temp_root: Path, sample_rows: int) -> str
     sample_firms_dir = temp_root / "firms_historical"
     sample_firms_dir.mkdir(parents=True, exist_ok=True)
 
-    source_files = sorted(FIRMS_HISTORICAL_DIR.glob("*.csv"))
+    parquet_files = sorted(FIRMS_HISTORICAL_DIR.glob("*.parquet"))
+    csv_files = sorted(FIRMS_HISTORICAL_DIR.glob("*.csv"))
+    source_files = parquet_files if parquet_files else csv_files
     if not source_files:
-        raise AssertionError(f"No historical FIRMS CSV files found in {FIRMS_HISTORICAL_DIR}")
+        raise AssertionError(f"No historical FIRMS parquet/CSV files found in {FIRMS_HISTORICAL_DIR}")
 
     for source_file in source_files:
-        _copy_csv_head(source_file, sample_firms_dir / source_file.name, sample_rows)
+        _copy_tabular_head(source_file, sample_firms_dir / source_file.name, sample_rows)
 
     with contextlib.redirect_stdout(io.StringIO()):
         viirs_df, modis_df = load_historical_data(str(sample_firms_dir))
@@ -226,7 +263,8 @@ def _validate_firms_historical_samples(temp_root: Path, sample_rows: int) -> str
     if modis_missing:
         raise AssertionError(f"MODIS sampled loader output missing columns: {sorted(modis_missing)}")
 
-    return f"viirs={len(viirs_df)} rows, modis={len(modis_df)} rows"
+    sample_format = "parquet" if source_files and source_files[0].suffix == ".parquet" else "csv"
+    return f"format={sample_format}, viirs={len(viirs_df)} rows, modis={len(modis_df)} rows"
 
 
 def _run_validation(
@@ -266,6 +304,7 @@ def main() -> int:
             ),
         ]
 
+    print("Asset format policy: parquet_preferred")
     print("Validated static asset loaders:")
     for result in results:
         print(f"- {result.name}: {result.status} ({result.detail})")

@@ -12,10 +12,10 @@ data/raw/*
 data/raw/firms/*
 !data/raw/firms/historical/
 data/raw/firms/historical/*
-!data/raw/firms/historical/fire_archive_J1V-C2_617609.csv
-!data/raw/firms/historical/fire_archive_M-C61_617608.csv
-!data/raw/firms/historical/fire_archive_SV-C2_617611.csv
-!data/raw/firms/historical/fire_nrt_J2V-C2_617610.csv
+!data/raw/firms/historical/fire_archive_J1V-C2_617609.parquet
+!data/raw/firms/historical/fire_archive_M-C61_617608.parquet
+!data/raw/firms/historical/fire_archive_SV-C2_617611.parquet
+!data/raw/firms/historical/fire_nrt_J2V-C2_617610.parquet
 logs/
 *.log
 

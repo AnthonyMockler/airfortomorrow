@@ -2,6 +2,7 @@
 Feature: Realtime Prediction Command Integrity
   Validate fail-fast argument behavior for realtime prediction mode.
 
+  @tier_a
   Scenario: realtime prediction rejects historical validation flags
     When I run "./scripts/predict_air_quality.sh --mode realtime --countries THA LAO --generate-map --validate-sensors --enhanced-maps --save-validation" with timeout 900
     Then the command should fail

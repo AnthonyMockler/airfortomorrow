@@ -2,12 +2,13 @@
 Feature: Himawari downloader contract
   Protect the bounded raw-data downloader behavior without requiring full H3, aggregation, or interpolation runs.
 
+  @tier_a
   Scenario: Himawari collector Python entrypoint exposes downloader CLI options
     When I run "python src/data_collectors/himawari_aod.py --help"
     Then the command should succeed
     And the command output should include Himawari CLI options "--mode,--start-date,--end-date,--hours,--download-only,--skip-if-h3-exists,--download-workers,--help"
 
-  @live
+  @tier_b @live
   Scenario: Historical downloader-only run creates fresh bounded raw files
     Given I clean the "data/raw/himawari" directory while preserving git-tracked files
     And I clean the "data/processed/himawari" directory while preserving git-tracked files
@@ -18,7 +19,7 @@ Feature: Himawari downloader contract
     And the updated Himawari raw files for mode "historical" should include path tokens "202501,01"
     And the latest updated Himawari raw file for mode "historical" should be non-empty
 
-  @live
+  @tier_b @live
   Scenario: Realtime downloader-only run creates fresh bounded raw files
     Given I clean the "data/raw/himawari" directory while preserving git-tracked files
     And I clean the "data/processed/himawari" directory while preserving git-tracked files

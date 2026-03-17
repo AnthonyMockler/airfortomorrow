@@ -1,7 +1,7 @@
 # TESTS KNOWLEDGE BASE
 
 **Generated:** 2026-03-06
-**Updated:** 2026-03-06
+**Updated:** 2026-03-16
 
 ## OVERVIEW
 Repository tests use **Behave BDD** as the preferred style for workflow and contract coverage, executed inside Docker for dependency parity.
@@ -11,20 +11,28 @@ Repository tests use **Behave BDD** as the preferred style for workflow and cont
 - Keep step definitions in `features/steps/` small and reusable.
 - Prefer command-level contract checks and atomic workflow checks over monolithic end-to-end scenarios.
 - Tag scenarios consistently:
+  - `@tier_a`: local/fast, must not use `@live` or `@slow`
+  - `@tier_b`: live non-slow, must include `@live` and must not include `@slow`
+  - `@tier_c`: slow, must include `@slow`
   - `@smoke`: fast runtime/environment checks
   - `@contract`: CLI/help/argument behavior
+  - `@static_assets`: fast loader-compatibility checks for bootstrap parquet/CSV assets
   - `@quickstart`: README setup/workflow coverage
   - `@slow`: long-running scenarios
   - `@live`: scenarios that require external APIs/network conditions
 
 ## EXECUTION RULES
 - Run BDD tests through Docker:
-  - `./scripts/run_behave_tests_compact.sh` for routine agent-driven runs
+  - `./scripts/run_behave_tests_compact.sh --tier a` for routine agent-driven runs
+  - `./scripts/run_behave_tests_compact.sh --tier b` for live non-slow runs
+  - `./scripts/run_behave_tests_compact.sh --tier c` for slow runs
+  - `./scripts/run_behave_tests_compact.sh --tier all` for full ordered suite
   - `./scripts/run_behave_tests.sh` only when full raw output is explicitly needed or when debugging the compact wrapper
+- Use `./scripts/validate_static_assets.sh` or `./scripts/run_behave_tests_compact.sh --tier a --scope static_assets` for regular static-asset format checks.
 - Avoid host execution unless debugging locally with explicit opt-in.
-- Default Behave execution should exclude `@slow` and `@live`.
+- Tier runs should not use ad-hoc tag forwarding.
 - For performance, soak, load, `@slow`, or other runs expected to exceed 10 minutes, start the command once, record the log path, and avoid polling, tailing, or status updates more often than every 5 to 10 minutes unless the run exits, fails, materially changes state, or the user asked for tighter updates.
-- When a Behave run is expected to be long, prefer `./scripts/run_behave_tests_compact.sh --long-run ...`. The compact shim also auto-enables the same guidance when forwarded Behave args include `@slow`.
+- When a Behave run is expected to be long, prefer `./scripts/run_behave_tests_compact.sh --tier c --long-run`. Tier C auto-enables the same guidance.
 
 ## AUTHORING GUIDELINES
 - Keep scenarios atomic so failures isolate to one workflow responsibility.

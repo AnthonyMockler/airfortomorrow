@@ -2,17 +2,20 @@
 Feature: Quick Start Workflow
   Validate the core README quickstart workflow in atomic BDD scenarios.
 
+  @tier_a
   Scenario: README contains the documented first-run command path
     Given the file "README.md" should exist
     Then the file "README.md" should contain "./scripts/setup.sh"
     And the file "README.md" should contain "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --generate-maps --parallel"
 
+  @tier_a
   Scenario: env_template can be copied into a valid .env file in a clean workspace
     Given I create a temporary quickstart workspace
     When I copy "env_template" to ".env" in the temporary quickstart workspace
     Then the path ".env" in the temporary quickstart workspace should be a regular file
     And the temporary quickstart ".env" file should contain required credential keys
 
+  @tier_a
   Scenario: complete pipeline wrapper executes in atomic mode and writes a log
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-himawari --skip-firms --skip-era5 --skip-openaq --skip-airgradient --skip-silver --skip-prediction --test-mode --test-openaq-limit 3" with timeout 120
     Then the command should succeed
@@ -22,7 +25,7 @@ Feature: Quick Start Workflow
     And the command output should contain "COMPLETE PIPELINE EXECUTION FINISHED SUCCESSFULLY!"
     And the command output should reference an existing log file
 
-  @live
+  @tier_b @live
   Scenario: realtime run surfaces authentication failures from component logs
     Given I clean the "data" directory while preserving git-tracked files
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-firms --skip-era5 --skip-airgradient --skip-silver --skip-prediction --parallel --test-mode --test-openaq-limit 3" with timeout 900
@@ -31,7 +34,7 @@ Feature: Quick Start Workflow
     And the current run should generate OpenAQ and Himawari component logs
     And the current run logs should not contain authentication or credential failures
 
-  @slow @live
+  @tier_c @slow @live
   Scenario: full realtime quickstart command produces core output artifacts
     Given I clean the "data" directory while preserving git-tracked files
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --generate-maps --parallel" with timeout 4200

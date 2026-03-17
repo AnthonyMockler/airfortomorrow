@@ -2,17 +2,19 @@
 Feature: OpenAQ realtime collector contract
   Protect OpenAQ realtime CLI and data-output contracts used by pipeline wrappers.
 
+  @tier_a
   Scenario: collect_openaq_realtime script exposes expected CLI options
     When I run "./scripts/collect_openaq_realtime.sh --help" with timeout 60
     Then the command should succeed
     And the command output should include CLI options "--days,--timeout,--limit,--test-mode,--help"
 
+  @tier_a
   Scenario: OpenAQ realtime Python client exposes expected CLI options
     When I run "python -m src.data_processors.openaq_realtime_client --help" with timeout 60
     Then the command should succeed
     And the command output should include CLI options "--days,--locations,--limit,--output,--test-mode,--test-limit"
 
-  @live
+  @tier_b @live
   Scenario: OpenAQ-only realtime pipeline run produces usable parquet data
     Given I clean the "data" directory while preserving git-tracked files
     When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --pipelines openaq --skip-silver --skip-prediction --test-mode --test-openaq-limit 8" with timeout 1800
@@ -27,7 +29,7 @@ Feature: OpenAQ realtime collector contract
     And the latest updated OpenAQ realtime parquet should have numeric values in column "value"
     And the latest updated OpenAQ realtime parquet should have at least 1 unique values in column "sensor_id"
 
-  @live @benchmark
+  @tier_b @live @benchmark
   Scenario: OpenAQ realtime benchmark uses one tenth of live locations
     Given I compute an OpenAQ live sample limit at one tenth of baseline locations with minimum 20
     When I run OpenAQ realtime collection with the computed sample limit and timeout 2400

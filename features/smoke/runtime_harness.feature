@@ -2,9 +2,11 @@
 Feature: Runtime Harness Smoke
   Validate that the Docker BDD harness has required runtime properties.
 
+  @tier_a
   Scenario: Docker test environment marker is set
     Given the environment variable "AIR_QUALITY_TEST_IN_DOCKER" should equal "1"
 
+  @tier_a
   Scenario Outline: Core Python dependencies import successfully
     Given python module "<module_name>" should import successfully
 
@@ -13,6 +15,7 @@ Feature: Runtime Harness Smoke
       | osgeo.gdal  |
       | eccodes     |
 
+  @tier_a
   Scenario Outline: Core dependency attributes are available
     Given python attribute "<attribute_path>" should exist
 

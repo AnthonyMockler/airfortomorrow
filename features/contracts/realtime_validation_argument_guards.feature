@@ -2,6 +2,7 @@
 Feature: Realtime Mode Invalid Validation Flag Guard
   Realtime prediction should reject historical validation options.
 
+  @tier_a
   Scenario: Realtime prediction rejects --validate-sensors
     When I run "./scripts/predict_air_quality.sh --mode realtime --countries THA LAO --validate-sensors" with timeout 120
     Then the command should fail

@@ -24,10 +24,10 @@
 
 ## Test Entrypoints
 
-- `./scripts/run_behave_tests_compact.sh`: preferred Behave entrypoint for routine agent work
+- `./scripts/run_behave_tests_compact.sh --tier a|b|c|all`: preferred tiered Behave entrypoint
 - `./scripts/run_behave_tests.sh`: raw Docker Behave harness
 - `./scripts/run_tests.sh`: pytest wrapper
-- `./scripts/smoke_test.sh`: smoke slice with Docker build path
+- `./scripts/smoke_test.sh`: Tier A smoke subset wrapper
 
 ## Data and Output Layout
 
