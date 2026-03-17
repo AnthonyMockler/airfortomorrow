@@ -281,7 +281,7 @@ Detailed workflow documentation:
 
 ### **XGBoost Prediction System**
 
-Air for tomorrow uses machine learning to predict PM2.5 concentrations based on the silver datasets with optional high-quality map visualizations.
+Air for Tomorrow uses machine learning to predict PM2.5 concentrations based on the silver datasets with optional high-quality map visualizations.
 
 ### **Model Input Features**
 
