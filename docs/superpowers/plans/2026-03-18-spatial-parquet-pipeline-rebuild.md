@@ -47,6 +47,10 @@ Rules:
 - do implementation work in dedicated git worktrees on `codex/...` branches
 - keep one bounded concern per worktree where practical
 - keep brainstorming, scope decisions, and doc iteration separate from implementation branches when possible
+- use the `using-git-worktrees` skill for each new implementation agent/thread
+- never have two coding agents editing the same worktree concurrently
+- read-only review can inspect another worktree, but coding changes should stay isolated to the owning worktree
+- if follow-on work must branch from an in-progress implementation branch, create a fresh worktree from the latest clean commit on that branch rather than sharing its editable workspace
 
 ## Implementation Readiness
 

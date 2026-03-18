@@ -39,6 +39,13 @@ Air for Tomorrow predicts PM2.5 on an H3 grid using ground sensors (OpenAQ, AirG
 - Do implementation in isolated git worktrees on `codex/...` branches rather than directly on `main`.
 - Prefer one bounded concern per worktree when practical.
 - Keep design/doc iteration separate from implementation branches when possible.
+- If you are starting a new implementation thread or subagent task, use the `using-git-worktrees` skill before writing code.
+- Do not point two coding agents at the same editable worktree at the same time.
+- Read-only review/exploration may inspect another implementation worktree, but only the owning coding agent should edit there.
+- If a task needs to continue work from an existing implementation branch, either:
+  - work in that branch as the sole coding agent, or
+  - create a fresh worktree from the latest clean commit on that branch for your own bounded task.
+- Keep each coding agent responsible for a clearly defined write set and report branch/worktree path in status updates.
 
 ## Test-First Rules
 
