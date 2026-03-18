@@ -90,8 +90,8 @@ The only exception is live APIs, where there is no stable source file to preserv
 V1 should be a simple command-driven batch runtime:
 
 1. User requests a date or date range for a dataset.
-2. The command builds an explicit work list.
-3. A local worker pool processes those work items in parallel.
+2. The command writes the full todo list up front into a simple SQLite `jobs` table.
+3. A local worker pool claims ready jobs and processes them in parallel.
 4. Outputs are validated and written to the target layer.
 5. A manifest is written for the published partition.
 6. A small SQLite database records run history and convenience indexes.
@@ -104,6 +104,19 @@ This is deliberately simpler than a full planner/orchestrator:
 - no heavy control plane
 
 SQLite is a convenience index and run log, not the heart of the architecture.
+
+Jobs should stay minimal. A job row only needs:
+
+- dataset ID
+- date
+- layer
+- status
+- retry count
+- required upstream dataset-date dependencies
+- last error
+- timestamps
+
+The runtime should precompute the whole todo list at the start of a command. Workers should only claim jobs whose required upstream manifests already exist. Existing published outputs should be skipped by default unless a rebuild is explicitly requested. Forced rebuilds should publish a new run and repoint the current manifest for that date.
 
 ### 5. Manifest Model
 
@@ -148,7 +161,7 @@ SQLite is acceptable, but only in a narrow role:
 
 - run history
 - simple status queries
-- optional work queue state for long backfills
+- minimal job queue state for backfills and batch runs
 - lightweight lookup index for published partitions
 
 If SQLite disappeared, the system should still be understandable and recoverable from storage plus manifests.

@@ -70,12 +70,23 @@ The plan must keep these architecture decisions:
 
 V1 should run from explicit job lists, not filesystem scans.
 
-For any command, the runtime should first compute the required jobs and record them in a simple SQLite `jobs` table. A local worker pool should then claim ready jobs, run them, publish the output partition, write the manifest, and mark the job complete.
+For any command, the runtime should first compute the full todo list and record it in a simple SQLite `jobs` table. A local worker pool should then claim ready jobs, run them, publish the output partition, write the manifest, and mark the job complete.
 
 Job granularity should stay simple:
 
 - bronze collection jobs are source-specific
 - silver, gold, and prediction jobs should default to one job per dataset per date
+
+Job rows should stay minimal:
+
+- dataset ID
+- date
+- layer
+- status
+- retry count
+- required upstream dataset-date dependencies
+- last error
+- timestamps
 
 Examples:
 
@@ -83,6 +94,8 @@ Examples:
 - `silver.era5_weather:2025-01-03`
 - `silver.air_quality_observations:2025-01-03`
 - `gold.model_features:2025-01-03`
+
+Workers should only claim jobs whose required upstream manifests already exist. Failed jobs should retry a small number of times, then remain failed. Downstream jobs should stay blocked until their upstream requirements succeed. Existing published outputs should be skipped by default unless a rebuild is explicitly requested. A forced rebuild should publish a new run and repoint the current manifest for that date.
 
 This keeps parallelism explicit without turning the system into a full orchestrator. Heavy spatial processors should stay coarse in v1: the default job is “process this day,” not “process this tile.”
 
@@ -104,7 +117,7 @@ Build the smallest useful runtime first.
 The runtime should work like this:
 
 1. User requests a dataset and date or date range.
-2. Code expands that request into explicit jobs and stores them in SQLite.
+2. Code expands that request into the full todo list and stores it in SQLite.
 3. Local worker processes claim ready jobs and handle the work in parallel.
 4. The partition is validated and published.
 5. A manifest is written next to the partition.
