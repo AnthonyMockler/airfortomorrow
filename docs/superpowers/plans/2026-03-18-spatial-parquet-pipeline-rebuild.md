@@ -4,11 +4,13 @@
 
 **Goal:** Build a new supported Parquet pipeline that treats legacy code as reference only, uses explicit bronze/silver/gold datasets, supports different historical and realtime retrieval adapters, and publishes large partitions safely through manifests plus a rebuildable SQLite index.
 
-**Architecture:** The supported system lives in a new `src/parquet_pipeline/` package and a new public wrapper `scripts/aq_pipeline.sh`. Retrieval-path differences such as realtime APIs versus historical archives are modeled as separate source adapters and bronze dataset IDs, while downstream silver and gold assets share unified schemas. Partitioning is asset-specific: use date-only partitions where transforms need wide spatial context, and introduce a spatial shard key only at stages where partitions are otherwise too large, with the default candidate being `h3_04` but validated by tests before it becomes policy.
+**Architecture:** The supported system lives in a new `src/parquet_pipeline/` package and a new public wrapper `scripts/aq_pipeline.sh`. Bronze stays source-native and canonical, silver remains rebuildable, gold is explicitly materialized, and predictions read from gold. Retrieval-path differences such as realtime APIs versus historical archives are modeled as separate source adapters and bronze dataset IDs, while task granularity and readiness rules are source-specific rather than universal. Partitioning is asset-specific: use date-only partitions where transforms need wide spatial context, and introduce a spatial shard key only at stages where partitions are otherwise too large, with the default candidate being `h3_04` but validated by tests before it becomes policy.
 
 **Tech Stack:** Python 3, Polars, PyArrow, Parquet, SQLite, JSON manifests, Behave, pytest, shell wrapper scripts, existing source code used only as migration reference
 
 ---
+
+> **Draft status:** This plan is provisional while brainstorming continues. Do not execute it until the architecture requirements in `docs/superpowers/specs/2026-03-18-parquet-lake-architecture-design.md` are locked and the plan is regenerated or explicitly re-approved.
 
 ## Scope Guard
 
@@ -20,6 +22,34 @@ It changes the implementation strategy in four important ways:
 - the new supported implementation is not constrained by the current `src/` module boundaries
 - `gold` becomes an explicit materialized Parquet layer, not an implied outcome of `silver`
 - historical and realtime collection paths are first-class adapter differences, not just a `mode` flag
+
+Current locked requirements that this provisional plan must respect:
+
+- bronze stays source-native where the raw artifact matters
+- cache is non-canonical and only allowed for heavy binary geospatial sources
+- existing Himawari bronze should be validated and relocated before adoption
+- existing OpenAQ and AirGradient raw data should be redownloaded instead of adopted
+- existing ERA5 cache should not be treated as bronze until investigated
+- task granularity and bronze readiness are source-specific
+- OpenAQ and AirGradient bronze always publish what was collected
+- silver builds from available bronze by default, including partial bronze
+- gold and predictions also build from available upstream data by default
+- gold and predictions emit dataset-level coverage summary artifacts plus CLI/log warnings when upstream coverage was partial
+- gold and prediction parquet schemas should stay free of embedded operational quality flags by default
+- coverage sidecars are human-readable, live next to the output they describe, and should include rich operator-facing context rather than only terse status flags
+- file/archive-based bronze should preserve source-native artifacts where practical
+- live API-based bronze should preserve lossless canonical raw-record bundles rather than transport-level request/page dumps
+- the preferred live-API bronze bundle format is `jsonl.gz`
+- the preferred live-API bronze bundle boundary is one day per source partition
+- live API bronze bundling must preserve all original source record content and only add fetch/provenance metadata
+- live API fetch/provenance metadata should live at the bundle or manifest level by default
+- bronze manifests should be hierarchical: published partition manifests plus per-artifact manifest entries
+- bronze per-artifact manifest entries should record content checksums by default
+- the default bronze checksum should be a fast non-cryptographic hash
+- live API bronze preserves duplicates exactly as fetched; deduplication begins in silver
+- live API bronze day partitions may be superseded by newer, fuller published versions
+- newer upstream bronze versions do not automatically trigger downstream rebuilds
+- stale-vs-newer-upstream status does not need to be surfaced by default
 
 This plan still executes in phases. The framework and CLI land first, then source families migrate one by one into the new runtime until `gold.model_features` and `predictions.pm25` are fully supported.
 
@@ -106,6 +136,8 @@ The new pipeline should use explicit dataset IDs instead of a global `mode` part
 
 The storage layout should partition by asset-specific keys, not by a universal `mode=` directory.
 
+Bronze assets are assumed to store source-native artifacts plus manifests, not immediately normalized Parquet replacements.
+
 ## Task 1: Freeze the New Public CLI and Contracts
 
 **Files:**
@@ -125,6 +157,7 @@ Required scenarios:
 - `./scripts/aq_pipeline.sh predict --date 2025-01-03 --countries THA`
 - invalid asset names fail fast
 - `gold.model_features` must be a required materialized dataset, not an implicit in-memory frame
+- gold and prediction commands should warn when upstream coverage was partial
 
 - [ ] **Step 2: Add failing step definitions**
 
@@ -181,6 +214,12 @@ def test_partition_strategy_does_not_use_mode_directory():
 def test_large_assets_can_opt_into_spatial_sharding():
     strategy = get_partition_strategy("gold.model_features")
     assert strategy.supports_spatial_shard is True
+
+
+def test_cache_policy_allows_only_heavy_binary_sources():
+    policy = load_cache_policy()
+    assert policy.is_cacheable("bronze.himawari_historical") is True
+    assert policy.is_cacheable("bronze.openaq_api") is False
 ```
 
 - [ ] **Step 3: Run the targeted pytest**
@@ -201,6 +240,14 @@ class AssetDefinition:
 ```
 
 Put the new supported configuration in `config/parquet_pipeline.yaml`, not into the legacy config tree.
+
+The config should include:
+
+- dataset registry
+- partition strategy
+- bronze readiness policy
+- allowed cacheable source families
+- coverage metadata requirements for partial-publish bronze sources
 
 - [ ] **Step 5: Implement partition policy as code**
 
@@ -254,6 +301,32 @@ def test_current_pointer_contains_dataset_id_not_mode(tmp_path):
 def test_rebuild_index_recovers_partition_state(tmp_path):
     rebuild_index_from_manifests(...)
     assert fetch_partition(...).published_run_id == "run-123"
+
+
+def test_bronze_manifest_supports_readiness_state():
+    manifest = PartitionManifest(...)
+    assert manifest.readiness_state in {"complete", "partial", "empty_complete", "adopted"}
+
+
+def test_air_quality_bronze_manifest_carries_coverage_metadata():
+    manifest = PartitionManifest(...)
+    assert "coverage" in manifest.metrics
+
+
+def test_bronze_partition_manifest_references_artifact_entries():
+    manifest = PartitionManifest(...)
+    assert manifest.artifact_manifest_ids
+
+
+def test_bronze_artifact_manifest_includes_checksum():
+    artifact = ArtifactManifest(...)
+    assert artifact.checksum
+
+
+def test_bronze_artifact_manifest_uses_fast_default_checksum():
+    artifact = ArtifactManifest(...)
+    assert artifact.checksum_algorithm
+    assert artifact.checksum_algorithm != "sha256"
 ```
 
 - [ ] **Step 2: Run the targeted pytest**
@@ -287,6 +360,12 @@ class PartitionManifest:
     row_count: int
     schema_fingerprint: str
     upstream_manifests: list[str]
+    readiness_state: str
+    expected_work_items: int | None
+    succeeded_work_items: int | None
+    failed_work_items: int | None
+    metrics: dict[str, object]
+    artifact_manifest_ids: list[str]
 ```
 
 - [ ] **Step 5: Implement the SQLite index as a rebuildable cache**
@@ -406,11 +485,19 @@ Rules:
 
 - realtime and historical code paths remain separate adapters
 - both normalize to shared bronze schemas
+- bronze persists source-native artifacts for file/archive sources and lossless canonical day-grained `jsonl.gz` raw-record bundles for live API sources before silver normalization
+- OpenAQ and AirGradient bronze publish even when coverage is partial
+- OpenAQ and AirGradient bronze do not deduplicate records
+- OpenAQ and AirGradient bronze day bundles may be republished as newer versions when later collection fills in more of the day
+- downstream rebuilds from newer bronze versions must be explicitly requested rather than automatic
+- lineage should retain exact upstream version references, but the runtime does not need a first-class stale flag by default
 - legacy modules may be called or copied as reference, but the supported implementation lives here
 
 - [ ] **Step 5: Implement `silver.air_quality_observations`**
 
 The transform should read published bronze manifests, normalize duplicates and outliers, and publish the silver dataset through the new runtime.
+
+It should not block on bronze completeness for OpenAQ or AirGradient. Instead it should propagate upstream coverage metadata into the silver manifest.
 
 - [ ] **Step 6: Re-run targeted pytest and Tier A Behave**
 
@@ -456,6 +543,11 @@ def test_himawari_transform_defers_spatial_sharding_until_after_wide_context_ste
     assert plan.pre_interpolation_spatial_shard is None
 
 
+def test_himawari_bronze_adoption_requires_relocation():
+    plan = build_adoption_plan("bronze.himawari_historical", ...)
+    assert plan.relocate_before_publish is True
+
+
 def test_era5_transform_can_publish_weather_partition():
     result = materialize_era5_weather(...)
     assert result.dataset_id == "silver.era5_weather"
@@ -470,13 +562,19 @@ Expected: FAIL because those adapters and transforms do not exist.
 
 Historical and realtime collection paths must remain separate adapters but converge into `silver.firms_intensity`.
 
+Bronze readiness should support `empty_complete` when all expected feeds were checked but no detections occurred.
+
 - [ ] **Step 4: Implement Himawari adapters and transform**
 
 Do not spatially shard too early. The plan must preserve wide-neighborhood requirements for interpolation steps before the final publish boundary.
 
+Support a relocation-based bronze adoption flow for trustworthy legacy NetCDF files.
+
 - [ ] **Step 5: Implement ERA5 adapters and transform**
 
 Use the same adapter split and publish semantics as the other source families.
+
+Do not adopt legacy `earthkit_cache` as bronze until the new bronze artifact is defined and validated.
 
 - [ ] **Step 6: Re-run the targeted pytest**
 
@@ -528,6 +626,9 @@ Rules:
 - read published silver manifests, not raw directories
 - emit a materialized Parquet dataset
 - include only model-ready columns and lineage metadata
+- do not block by default on partial upstream silver coverage
+- write a compact dataset-level coverage summary sidecar
+- write a human-readable dataset-level coverage summary sidecar next to the gold output
 
 - [ ] **Step 4: Re-run targeted pytest and Tier A Behave**
 
@@ -579,6 +680,10 @@ manifest = resolve_current_manifest("gold.model_features", date="2025-01-03", sp
 gold_df = pl.scan_parquet(manifest.files)
 ```
 
+Prediction should proceed by default even when the gold manifest records partial upstream lineage. The manifest and run output should surface that condition clearly instead of failing closed.
+
+The prediction command should also write a human-readable dataset-level coverage summary artifact alongside the prediction outputs, including rich operator-facing context.
+
 - [ ] **Step 4: Implement backfill planning**
 
 The planner should:
@@ -588,6 +693,8 @@ The planner should:
 - inspect published manifests
 - consult SQLite watermarks
 - emit only missing or invalid work items
+
+It should also respect source-specific task granularity and bronze readiness thresholds instead of assuming a universal completeness rule.
 
 - [ ] **Step 5: Re-run targeted pytest and Tier A Behave**
 
