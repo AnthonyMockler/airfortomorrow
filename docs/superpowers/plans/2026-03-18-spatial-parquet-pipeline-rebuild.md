@@ -39,32 +39,19 @@ Do not build these in the first slice:
 
 ## Worktree Strategy
 
-Because this is a breaking architectural change, implementation should not happen on `main`.
+Keep `main` runnable and deployable throughout the rebuild.
 
-Rules:
-
-- keep `main` runnable and deployable throughout the rebuild
 - do implementation work in dedicated git worktrees on `codex/...` branches
-- keep one bounded concern per worktree where practical
-- keep brainstorming, scope decisions, and doc iteration separate from implementation branches when possible
+- keep one bounded concern per worktree
+- keep design/doc iteration separate from implementation branches where possible
 
 ## Scope Discipline
 
-Implementation branches must not silently widen scope.
-
-Rules:
-
-- if a contract/test task uncovers an unrelated production bug, either surface it as a blocker or split it into a separately declared fix
-- if a change touches a dependency/API contract, update the dependency declaration in the same branch
-- add RED coverage for the intended contract, not just for a workaround that happens to pass in the current environment
-- treat “tests are green” as necessary but not sufficient; review must still confirm the code matches the locked design
-- use the `using-git-worktrees` skill for each new implementation agent/thread
-- never have two coding agents editing the same worktree concurrently
-- read-only review can inspect another worktree, but coding changes should stay isolated to the owning worktree
-- if follow-on work must branch from an in-progress implementation branch, create a fresh worktree from the latest clean commit on that branch rather than sharing its editable workspace
-- do not mark a task `DONE` without explicit GREEN evidence from the relevant verification commands
-- every implementation status update should include the exact commands run and a short result summary
-- if verification is blocked by an unrelated failure, report `BLOCKED` rather than claiming completion
+- stay within the declared task scope and write set
+- do not mix unrelated fixes into the same branch
+- if extra work appears, either report it as a blocker or split it into a separate bounded task
+- if a change depends on a contract, update the contract and its tests in the same branch
+- only mark work complete with explicit GREEN evidence
 
 ## Implementation Readiness
 
