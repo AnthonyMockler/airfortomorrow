@@ -15,14 +15,18 @@ The published dataset is `silver.air_quality_observations`.
 V1 contract:
 
 - output format is plain Parquet
-- published partition key is `date`
+- published partition key is `date_utc`
 - `h3_08` is the only managed spatial key
 - published silver output must not include lat/lon geometry columns or GeoParquet metadata
-- output should contain one row per `date + h3_08`
+- output should contain one row per `date_utc + h3_08`
 - output should include `pm25` and `observation_count`
 - output should include `source_mix`
+- output should include `reference_observation_count` and `low_cost_observation_count`
+- output is sparse: only publish cell-days with at least one surviving reading
 
 This dataset is the first canonical analytical air-quality layer. Bronze remains the raw recovery layer.
+
+`silver.air_quality_observations` does not need to emit a dense H3 grid. Dense cell coverage is a later gold-stage concern when building model-ready features.
 
 ## Inputs
 
@@ -45,13 +49,15 @@ Normalize OpenAQ and AirGradient records into a common row shape inside the tran
 
 The transform should derive, at minimum:
 
-- `date`
+- `date_utc`
 - `h3_08`
 - `pm25`
 - source identifier needed for debugging during the run
 - source class information needed to derive `source_mix`
 
 Raw coordinates may be used transiently to compute `h3_08`, but they should not be part of the published silver schema.
+
+The published day column should be named `date_utc`, not the more ambiguous `date`.
 
 ### 2. Classify Sensor Source Type
 
@@ -136,9 +142,25 @@ If an OpenAQ sensor cannot be classified deterministically as `reference_grade` 
 
 Convert each surviving source record to `h3_08` during normalization.
 
-The old coordinate-based deduplication rule should not be preserved. The managed silver dataset is H3-based, so aggregation should happen on `date + h3_08`, not on raw latitude/longitude equality.
+Rows missing usable coordinates or failing H3 conversion should be dropped and logged. They should not fail the whole day materialization in v1.
 
-### 4. Temporary Outlier Guardrail
+The old coordinate-based deduplication rule should not be preserved. The managed silver dataset is H3-based, so aggregation should happen on `date_utc + h3_08`, not on raw latitude/longitude equality.
+
+### 4. Normalize Timestamps To UTC
+
+Each source transform must normalize its authoritative source timestamp to `datetime_utc`, then derive `date_utc` from that value.
+
+Rules:
+
+- use the source-specific authoritative timestamp field
+- do not mix UTC and local fields casually
+- published day aggregation must derive from `datetime_utc`
+- rows missing a usable timestamp or failing UTC normalization should be dropped and logged in v1
+- dropped timestamp rows should not fail the whole day materialization in v1
+
+This is a deliberate v1 simplification. Future work may need a more careful treatment of local-day boundaries or presentation-layer timezone handling for GMT+7 users, but the canonical silver contract should stay UTC-based for now.
+
+### 5. Temporary Outlier Guardrail
 
 V1 does not implement real outlier detection yet.
 
@@ -149,20 +171,22 @@ Instead:
 
 This is explicitly a temporary placeholder and should be called out in code comments, tests, and task documentation as future work.
 
-### 5. No Explicit Duplicate-Removal Step In V1
+### 6. No Explicit Duplicate-Removal Step In V1
 
 Do not add a separate exact-duplicate removal step in v1.
 
 If duplicate source records exist, they will contribute to the final mean. That is acceptable for the first implementation and should be treated as an explicit v1 tradeoff, not an accident.
 
-### 6. Aggregate To One Cell-Day Value
+### 7. Aggregate To One Cell-Day Value
 
-After normalization and the temporary `pm25 <= 400` guardrail, combine all surviving OpenAQ and AirGradient readings for the target date and aggregate to one row per `date + h3_08`.
+After normalization and the temporary `pm25 <= 400` guardrail, combine all surviving OpenAQ and AirGradient readings for the target date and aggregate to one row per `date_utc + h3_08`.
 
 Aggregation rule:
 
 - `pm25 = mean(all surviving readings in that cell on that day)`
 - `observation_count = count(all surviving readings in that cell on that day)`
+- `reference_observation_count = count(surviving reference-grade readings in that cell on that day)`
+- `low_cost_observation_count = count(surviving low-cost readings in that cell on that day)`
 - `source_mix = reference_grade` if every surviving reading in the cell-day is `reference_grade`
 - `source_mix = low_cost` if every surviving reading in the cell-day is `low_cost`
 - `source_mix = mixed_source` if the cell-day contains both `reference_grade` and `low_cost`
@@ -197,10 +221,11 @@ The normalization and aggregation logic should be table-in / table-out code that
 
 The implementation should include small deterministic tests for:
 
-- multiple readings in one `date + h3_08` aggregate to their mean
-- OpenAQ and AirGradient readings in the same `date + h3_08` aggregate together
+- multiple readings in one `date_utc + h3_08` aggregate to their mean
+- OpenAQ and AirGradient readings in the same `date_utc + h3_08` aggregate together
 - records with `pm25 > 400` are excluded before aggregation
 - `observation_count` reflects the number of surviving readings used in the mean
+- `reference_observation_count + low_cost_observation_count = observation_count`
 - an AirGradient-only cell-day yields `source_mix = low_cost`
 - an OpenAQ cell-day with `instruments = ["Government Monitor"]` yields `source_mix = reference_grade`
 - an OpenAQ cell-day with provider or instrument metadata identified as `AirGradient`, `Clarity`, or `HabitatMap` yields `source_mix = low_cost`
@@ -208,6 +233,8 @@ The implementation should include small deterministic tests for:
 - unclassified OpenAQ metadata fails classification instead of silently defaulting
 - `provider_name = Thailand` on its own does not classify a row as `reference_grade`
 - `owner_name = Unknown Governmental Organization` on its own does not classify a row as `reference_grade`
+- rows with missing coordinates are dropped and logged
+- rows with unusable timestamps are dropped and logged
 - output contains `h3_08` and does not publish raw lat/lon columns
 - the old `keep first` behavior is not reproduced
 

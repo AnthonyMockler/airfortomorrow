@@ -33,6 +33,13 @@ Air for Tomorrow predicts PM2.5 on an H3 grid using ground sensors (OpenAQ, AirG
 - High-risk or cross-source changes: decision note + plan required.
 - Docs-only changes with no behavior change can skip Behave, plans, and decisions.
 
+## Worktrees And Branches
+
+- For large breaking changes or cross-layer rebuilds, keep `main` runnable and deployable.
+- Do implementation in isolated git worktrees on `codex/...` branches rather than directly on `main`.
+- Prefer one bounded concern per worktree when practical.
+- Keep design/doc iteration separate from implementation branches when possible.
+
 ## Test-First Rules
 
 - Workflow/CLI/contract behavior: write or update Behave first and capture RED before implementation.

@@ -67,6 +67,10 @@ Important rules:
 - Every published silver dataset should be plain Parquet with `h3_08` as its only managed spatial key.
 - Published silver outputs should not carry lat/lon geometry columns, GeoParquet metadata, or alternate spatial encodings.
 - Gold is where source-specific silver datasets are merged into model features.
+- Gold should build from a dense `h3_08` grid for the requested countries and date range, then left-join sparse silver datasets onto that grid.
+- Training labels may live inside `gold.model_features`; training code can split them off later rather than requiring a separate label dataset in v1.
+- For v1, keep labels aligned to the same `date_utc = D` inside `gold.model_features`; if training needs `D -> D+1` shifting, do that in training code for now.
+- For v1, training should use predominantly reference-grade rows, eval/test should use reference-grade rows, and inference should score every row in the dense gold grid.
 - If we want to compare algorithm variants later, they should become separate published silver dataset IDs rather than mutating one hidden implementation.
 
 The detailed v1 contract for `silver.air_quality_observations` is defined in [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md).
@@ -80,6 +84,15 @@ For silver specifically:
 - publish plain Parquet only
 - use `h3_08` as the only spatial encoding in the managed output
 - convert source coordinates or geometry to `h3_08` inside the transform, not in the published schema
+
+For gold specifically:
+
+- publish plain Parquet only
+- use a dense `h3_08` grid as the base table for each `date_utc`
+- parameterize the grid by the requested country list rather than hardcoding THA+LAO
+- cache the generated grid by a deterministic key such as sorted countries, H3 resolution, and boundary version
+- revisit later whether label shifting should move from training code into the gold build itself
+- keep the training reference-dominance threshold configurable rather than hardcoding it into the architecture
 
 Bronze should follow source family rules:
 

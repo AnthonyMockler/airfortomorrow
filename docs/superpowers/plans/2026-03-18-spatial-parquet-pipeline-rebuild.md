@@ -37,6 +37,36 @@ Do not build these in the first slice:
 - automatic downstream rebuilds when bronze changes
 - a broad rewrite of every source before one end-to-end path works
 
+## Worktree Strategy
+
+Because this is a breaking architectural change, implementation should not happen on `main`.
+
+Rules:
+
+- keep `main` runnable and deployable throughout the rebuild
+- do implementation work in dedicated git worktrees on `codex/...` branches
+- keep one bounded concern per worktree where practical
+- keep brainstorming, scope decisions, and doc iteration separate from implementation branches when possible
+
+## Implementation Readiness
+
+The following work is locked enough to start now:
+
+- Phase 1: Minimal Runtime Foundation
+- Phase 2: OpenAQ and AirGradient bronze collection for the first slice
+- Phase 3: `silver.air_quality_observations`
+- Phase 3: dense-grid foundation for `gold.model_features`
+
+The following work should wait until later decisions are finished:
+
+- Himawari implementation
+- FIRMS implementation beyond the current bronze/source rules
+- ERA5 implementation
+- real outlier detection
+- any gold-stage imputation/defaulting policy
+- any change that moves label shifting from training code into gold
+- any wider prediction/training behavior beyond the currently locked contracts
+
 ## Target V1 Surface
 
 The first supported surface should stay very small:
@@ -157,12 +187,7 @@ Keep bronze fetch rules explicit in config for v1. The planner should not invent
 
 Handle bronze source-by-source, conservatively.
 
-### Himawari
-
-- inventory existing NetCDF files
-- validate completeness/integrity
-- relocate to the new bronze layout
-- publish bronze manifests against the relocated files
+### Ready Now: OpenAQ and AirGradient
 
 ### OpenAQ and AirGradient
 
@@ -173,6 +198,17 @@ Handle bronze source-by-source, conservatively.
 - note but defer `sensor_id × date` and multi-day OpenAQ realtime fetch strategies unless day-level fetches prove inadequate
 - store live API bronze as daily `jsonl.gz`
 - preserve raw records without deduplication
+
+### Not In The First Build Thread Yet
+
+These source families stay in the plan, but they are not part of the implementation-ready first slice:
+
+### Himawari
+
+- inventory existing NetCDF files
+- validate completeness/integrity
+- relocate to the new bronze layout
+- publish bronze manifests against the relocated files
 
 ### ERA5
 
@@ -203,6 +239,12 @@ The first end-to-end path should be:
 5. `predictions.pm25`
 
 Implement `silver.air_quality_observations` against the dedicated contract in [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md).
+Implement `gold.model_features` as a dense `h3_08` grid over the requested country set and `date_utc`, then left-join sparse silver inputs onto that grid. Generate this grid on demand, but cache it by a deterministic key rather than rebuilding it every run.
+Keep training labels in `gold.model_features` for v1 rather than creating a separate gold label dataset.
+Keep those labels aligned to the same `date_utc = D` for v1, matching the current setup. If training needs a `D -> D+1` shift, keep that in training code for now and revisit later whether it belongs in gold.
+Train on predominantly reference-grade rows using a configurable default threshold, evaluate on reference-grade rows, and run inference on every row in the dense gold grid.
+
+For the first build thread, it is acceptable to stop after the dense-grid and join foundation for `gold.model_features` if later feature-schema details are still under discussion.
 
 ### Why This First
 
