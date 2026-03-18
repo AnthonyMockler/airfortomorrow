@@ -69,6 +69,8 @@ Important rules:
 - Gold is where source-specific silver datasets are merged into model features.
 - If we want to compare algorithm variants later, they should become separate published silver dataset IDs rather than mutating one hidden implementation.
 
+The detailed v1 contract for `silver.air_quality_observations` is defined in [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md).
+
 ### 3. Storage Rules
 
 Managed analytical layers should be Parquet.

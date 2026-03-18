@@ -202,6 +202,8 @@ The first end-to-end path should be:
 4. `gold.model_features`
 5. `predictions.pm25`
 
+Implement `silver.air_quality_observations` against the dedicated contract in [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md).
+
 ### Why This First
 
 This slice proves the important workflow boundaries:
