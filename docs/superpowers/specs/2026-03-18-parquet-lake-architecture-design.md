@@ -53,7 +53,12 @@ This keeps the system easy to run on one server, preserves portability, and avoi
 
 ### 1. Keep the Existing External Shape
 
+
+## ARCHITECT NOTE: The below is an incorrect assumption. We don't need to keep the existing user facing wrappers, and we won't keep the existing python implementations, except as skeletons / reference.
+
 Retain the current user-facing wrapper model in [`scripts/`](/Users/anthonymockler/Documents/unicef/airfortomorrow/scripts) and the Python implementation model in [`src/`](/Users/anthonymockler/Documents/unicef/airfortomorrow/src).
+
+
 
 The external workflow should still feel like:
 
@@ -67,6 +72,9 @@ The architectural change is in how these steps materialize, publish, discover, a
 ### 2. Treat Datasets as Partitioned Assets
 
 Even without a separate orchestrator, each dataset should be treated as a partitioned asset with:
+
+
+## ARCHITECT note - Without some intermediate partition key (e.g. H3_04 or similar), many of these datasets will have huge individual partitions. We should consider an intermediate partition key (probably H3_04, but I'm open to options). We can't do this too early - Because IDW / KDE etc will need datapoints that are further apart than a single H3_04
 
 - an explicit partition key
 - a declared upstream dependency set
@@ -111,7 +119,7 @@ Keep the current medallion-ish layers but make publication explicit:
 
 - `data/raw/` remains the landing area for raw and minimally normalized source data
 - `data/processed/` remains the layer for source-specific cleaned outputs
-- `data/silver/` remains the merged feature dataset
+- `data/silver/` remains the merged feature dataset # ARCHITECT NOTE - How are we going to materialize the 'gold' parquet layer that we actually use to model with?
 - `data/predictions/` remains the prediction layer
 
 Inside each dataset, stop relying on “latest file wins”. Use a partition layout that supports both local disk and object storage:
@@ -142,9 +150,9 @@ Partition by the axes that matter operationally, not by every analytical dimensi
 
 Recommended defaults:
 
-- Partition by `mode`
+- Partition by `mode` # ARCHITECT note - Partition by mode is dumb
 - Partition by `date`
-- Partition by `country` only when it materially reduces write/read cost
+- Partition by `country` only when it materially reduces write/read cost # Architect note - See previous comments about H3_04 as an intermediate partition step
 - Keep `h3_08`, `location_id`, and similar high-cardinality identifiers as columns, not partition keys
 
 For large daily partitions, shard within a partition by file count or target size. Aim for moderately large Parquet files rather than millions of tiny files.
@@ -199,7 +207,7 @@ This is the right fit for a single large server:
 
 ### 9. Backfill and Recovery Model
 
-The one-time four-year backfill should use the same mechanics as daily batch runs.
+The one-time four-year backfill should use the same mechanics as daily batch runs. # ARCHITECT Note - Please note that some datasets have different retrieval paths for historical vs realtime (e.g. We retrieve realtime OpenAQ via the API, but historical via archived S3 buckets. There are other datasets where the historical and realtime data collection paths are different)
 
 There should not be a separate “historical mode architecture”. Instead:
 
