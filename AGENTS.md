@@ -55,17 +55,12 @@ Air for Tomorrow predicts PM2.5 on an H3 grid using ground sensors (OpenAQ, AirG
 
 ## Scope And Contract Discipline
 
-- Stay inside the declared task scope and write set. Do not widen a branch from “contract coverage” into “production compatibility fix” unless that scope change is made explicit.
-- If a task uncovers an unrelated production bug or dependency mismatch, either:
-  - stop and report it as a blocker, or
-  - split it into a clearly declared follow-on fix with its own RED/GREEN cycle.
-- Do not patch around a dependency/API mismatch when the real requirement is to align the dependency contract itself.
-- If you change code that depends on a specific library/API contract, update the dependency declaration in the same branch and add a RED test for the intended contract.
-- Test the intended behavior, not a fallback workaround that only matches the current environment.
-- Review must check not just that tests are green, but that:
-  - the code matches the locked design
-  - the dependency/version contract is aligned
-  - the new tests cover the intended behavior
+- Stay within the declared task scope and write set.
+- Do not mix unrelated fixes into the same branch.
+- If a task uncovers extra work outside scope, either report it as a blocker or split it into a separate bounded task.
+- If a change relies on a contract, update the contract and its tests in the same branch.
+- Tests must cover the intended behavior, not an incidental workaround.
+- Green tests are necessary, not sufficient; review must still check scope, contract alignment, and test intent.
 
 ## Verification Evidence
 
