@@ -77,16 +77,21 @@ Job granularity should stay simple:
 - bronze collection jobs are source-specific
 - silver, gold, and prediction jobs should default to one job per dataset per date
 
-Job rows should stay minimal:
+Job rows should stay minimal. Most jobs only need:
 
 - dataset ID
-- date
 - layer
 - status
 - retry count
 - required upstream dataset-date dependencies
 - last error
 - timestamps
+
+Bronze fetch jobs are the exception:
+
+- they may use a source-specific `job_key` instead of a single date
+- they may publish multiple daily bronze partitions from one fetch
+- they should store the list of expected output dates explicitly
 
 Examples:
 
@@ -95,7 +100,7 @@ Examples:
 - `silver.air_quality_observations:2025-01-03`
 - `gold.model_features:2025-01-03`
 
-Workers should only claim jobs whose required upstream manifests already exist. Failed jobs should retry a small number of times, then remain failed. Downstream jobs should stay blocked until their upstream requirements succeed. Existing published outputs should be skipped by default unless a rebuild is explicitly requested. A forced rebuild should publish a new run and repoint the current manifest for that date.
+Workers should only claim jobs whose required upstream manifests already exist. Failed jobs should retry a small number of times, then remain failed. Downstream jobs should stay blocked until their upstream requirements succeed. Existing published outputs should be skipped by default unless a rebuild is explicitly requested. A forced rebuild should publish a new run and repoint the current manifest for that date. Bronze fetch retries should skip dates that were already published successfully.
 
 This keeps parallelism explicit without turning the system into a full orchestrator. Heavy spatial processors should stay coarse in v1: the default job is “process this day,” not “process this tile.”
 
@@ -110,7 +115,7 @@ Build the smallest useful runtime first.
 - add simple config loading
 - add partition path helpers
 - add one partition manifest format
-- add a small SQLite database for run history, status lookup, and jobs
+- add a small SQLite database for run history, status lookup, jobs, and bronze fetch output-date tracking
 
 ### Shape
 
@@ -142,6 +147,8 @@ The runtime should work like this:
 ### Notes
 
 Keep the manifest simple. For bronze, artifact entries should be inline inside the partition manifest rather than split into separate per-artifact manifest files.
+
+Keep bronze fetch rules explicit in config for v1. The planner should not invent adaptive fetch windows at runtime.
 
 ## Phase 2: Bronze Migration and Collection
 

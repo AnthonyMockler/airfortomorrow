@@ -105,10 +105,9 @@ This is deliberately simpler than a full planner/orchestrator:
 
 SQLite is a convenience index and run log, not the heart of the architecture.
 
-Jobs should stay minimal. A job row only needs:
+Jobs should stay minimal. Most jobs only need:
 
 - dataset ID
-- date
 - layer
 - status
 - retry count
@@ -116,7 +115,15 @@ Jobs should stay minimal. A job row only needs:
 - last error
 - timestamps
 
-The runtime should precompute the whole todo list at the start of a command. Workers should only claim jobs whose required upstream manifests already exist. Existing published outputs should be skipped by default unless a rebuild is explicitly requested. Forced rebuilds should publish a new run and repoint the current manifest for that date.
+For silver, gold, and prediction jobs, that means one dataset-date job by default.
+
+Bronze fetch jobs are the exception:
+
+- they may use a source-specific `job_key` instead of a single date
+- they may publish multiple daily bronze partitions from one successful fetch
+- they should store the list of expected output dates explicitly
+
+The runtime should precompute the whole todo list at the start of a command. Workers should only claim jobs whose required upstream manifests already exist. Existing published outputs should be skipped by default unless a rebuild is explicitly requested. Forced rebuilds should publish a new run and repoint the current manifest for that date. Bronze fetch retries should skip dates that were already published successfully. Silver readiness should stay date-local: a silver job only cares whether its own upstream bronze partition exists.
 
 ### 5. Manifest Model
 
@@ -149,8 +156,8 @@ The pattern should be:
 
 Task granularity should stay source-specific:
 
-- Himawari may use file-level work internally
-- API sources may use day-level or chunk-level work internally
+- Himawari may use file-level fetch jobs
+- archive/API sources may use day-, week-, month-, or chunk-level fetch jobs depending on the source
 - downstream publish boundaries can still be date-level
 
 The important thing is to avoid implicit “scan directories until things seem done” behavior.
@@ -165,6 +172,8 @@ SQLite is acceptable, but only in a narrow role:
 - lightweight lookup index for published partitions
 
 If SQLite disappeared, the system should still be understandable and recoverable from storage plus manifests.
+
+Source-specific bronze fetch window rules should be fixed and explicit in config for v1, not chosen adaptively by the planner at runtime.
 
 ## Source Policies
 
