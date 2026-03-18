@@ -66,6 +66,26 @@ The plan must keep these architecture decisions:
 - ERA5 `earthkit_cache` should not be adopted until understood
 - cache is allowed only for heavy binary geospatial formats
 
+## Execution Model
+
+V1 should run from explicit job lists, not filesystem scans.
+
+For any command, the runtime should first compute the required jobs and record them in a simple SQLite `jobs` table. A local worker pool should then claim ready jobs, run them, publish the output partition, write the manifest, and mark the job complete.
+
+Job granularity should stay simple:
+
+- bronze collection jobs are source-specific
+- silver, gold, and prediction jobs should default to one job per dataset per date
+
+Examples:
+
+- `silver.himawari_aod:2025-01-03`
+- `silver.era5_weather:2025-01-03`
+- `silver.air_quality_observations:2025-01-03`
+- `gold.model_features:2025-01-03`
+
+This keeps parallelism explicit without turning the system into a full orchestrator. Heavy spatial processors should stay coarse in v1: the default job is “process this day,” not “process this tile.”
+
 ## Phase 1: Minimal Runtime Foundation
 
 Build the smallest useful runtime first.
@@ -77,18 +97,18 @@ Build the smallest useful runtime first.
 - add simple config loading
 - add partition path helpers
 - add one partition manifest format
-- add a small SQLite database for run history and status lookup
+- add a small SQLite database for run history, status lookup, and jobs
 
 ### Shape
 
 The runtime should work like this:
 
 1. User requests a dataset and date or date range.
-2. Code expands that request into a concrete work list.
-3. Local worker processes handle the work in parallel.
+2. Code expands that request into explicit jobs and stores them in SQLite.
+3. Local worker processes claim ready jobs and handle the work in parallel.
 4. The partition is validated and published.
 5. A manifest is written next to the partition.
-6. SQLite records the run for convenience.
+6. SQLite records job and run state for convenience.
 
 ### Files
 
