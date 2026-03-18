@@ -1,6 +1,6 @@
 # Air Quality Silver Materialization Spec
 
-- Status: Brainstorming
+- Status: Locked for slice 1 execution
 - Date: 2026-03-18
 - Scope: Define how `silver.air_quality_observations` should be built from OpenAQ and AirGradient bronze in v1.
 
@@ -239,7 +239,8 @@ The implementation should include small deterministic tests for:
 - an OpenAQ cell-day with `instruments = ["Government Monitor"]` yields `source_mix = reference_grade`
 - an OpenAQ cell-day with provider or instrument metadata identified as `AirGradient`, `Clarity`, or `HabitatMap` yields `source_mix = low_cost`
 - a cell-day with both reference-grade and low-cost contributors yields `source_mix = mixed_source`
-- unclassified OpenAQ metadata fails classification instead of silently defaulting
+- unclassified OpenAQ metadata is dropped and logged instead of silently defaulting
+- conflicting OpenAQ classification signals are dropped and logged instead of being guessed
 - `provider_name = Thailand` on its own does not classify a row as `reference_grade`
 - `owner_name = Unknown Governmental Organization` on its own does not classify a row as `reference_grade`
 - rows with missing coordinates are dropped and logged

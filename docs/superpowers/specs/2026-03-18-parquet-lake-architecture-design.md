@@ -1,6 +1,6 @@
 # Parquet Lake Architecture Design
 
-- Status: Brainstorming; simplified v1 revision
+- Status: Locked for slice 1 execution; later phases still evolving
 - Date: 2026-03-18
 - Scope: Replace the current brittle workflow with a simpler Python-first pipeline that preserves raw data, keeps bronze/silver/gold boundaries clear, and remains easy to run on one machine.
 

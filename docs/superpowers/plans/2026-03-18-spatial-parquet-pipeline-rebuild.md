@@ -1,6 +1,6 @@
 # Parquet Pipeline Rebuild
 
-- Status: Planned; simplified v1 revision
+- Status: In Progress; simplified v1 revision
 - Owner: Codex + Anthony
 - Last Updated: 2026-03-18
 
@@ -289,7 +289,7 @@ Add the other source families one at a time.
 
 ## Phase 5: Spatial Sharding Only Where Needed
 
-For V1, published partitions should use `date` only.
+For V1, published partitions should use `date_utc` only.
 
 - do not partition by country
 - do not add spatial shard keys to bronze, silver, or gold
@@ -307,10 +307,9 @@ An acceptable v1 shape is:
 - `src/parquet_pipeline/manifests.py`
 - `src/parquet_pipeline/runtime.py`
 - `src/parquet_pipeline/status_db.py`
-- `src/parquet_pipeline/bronze/`
-- `src/parquet_pipeline/silver/`
-- `src/parquet_pipeline/gold/`
-- `src/parquet_pipeline/predict/`
+- `src/parquet_pipeline/bronze.py`
+- `src/parquet_pipeline/silver_air_quality.py`
+- `src/parquet_pipeline/gold_model_features.py`
 
 Only split these further when the modules become hard to understand.
 
@@ -319,12 +318,13 @@ Only split these further when the modules become hard to understand.
 Before calling V1 real, verify:
 
 - the CLI can collect, materialize, build gold, and predict for a small date range
-- Himawari adoption works on a representative sample
 - OpenAQ and AirGradient bronze are clearly raw and separate from silver
 - silver can be deleted and rebuilt from bronze
 - gold can be deleted and rebuilt from silver
 - predictions read gold, not silver
 - the runtime works on one machine without extra services
+
+Himawari adoption, FIRMS expansion, and ERA5 bronze design should be verified later in their own phases, not treated as first-slice acceptance criteria.
 
 ## Deferred Until Later
 
