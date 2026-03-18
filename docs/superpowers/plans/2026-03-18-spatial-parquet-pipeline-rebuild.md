@@ -47,6 +47,17 @@ Rules:
 - do implementation work in dedicated git worktrees on `codex/...` branches
 - keep one bounded concern per worktree where practical
 - keep brainstorming, scope decisions, and doc iteration separate from implementation branches when possible
+
+## Scope Discipline
+
+Implementation branches must not silently widen scope.
+
+Rules:
+
+- if a contract/test task uncovers an unrelated production bug, either surface it as a blocker or split it into a separately declared fix
+- if a change touches a dependency/API contract, update the dependency declaration in the same branch
+- add RED coverage for the intended contract, not just for a workaround that happens to pass in the current environment
+- treat “tests are green” as necessary but not sufficient; review must still confirm the code matches the locked design
 - use the `using-git-worktrees` skill for each new implementation agent/thread
 - never have two coding agents editing the same worktree concurrently
 - read-only review can inspect another worktree, but coding changes should stay isolated to the owning worktree
