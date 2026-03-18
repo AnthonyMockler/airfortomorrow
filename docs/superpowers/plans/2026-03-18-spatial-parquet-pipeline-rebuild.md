@@ -190,19 +190,11 @@ Add the other source families one at a time.
 
 ## Phase 5: Spatial Sharding Only Where Needed
 
-Do not make spatial sharding a universal rule.
+For V1, published partitions should use `date` only.
 
-Start with:
-
-- date-only bronze
-- date-only early silver
-
-Only add spatial sharding when:
-
-- partitions are too large without it
-- the transform no longer needs wider spatial context
-
-The first likely place for sharding is later silver or gold, not bronze.
+- do not partition by country
+- do not add spatial shard keys to bronze, silver, or gold
+- keep H3 or other spatial IDs as columns
 
 ## Suggested File Layout
 

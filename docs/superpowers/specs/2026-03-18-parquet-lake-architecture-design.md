@@ -184,22 +184,13 @@ If SQLite disappeared, the system should still be understandable and recoverable
 
 ## Partitioning Rules
 
-Partitioning should stay conservative:
+V1 should partition published datasets by `date` only.
 
-- partition by `date` first
-- add `country_group` only if it clearly helps
-- add spatial sharding only where a dataset is too large without it
-- keep high-cardinality IDs such as `location_id` or fine H3 cells as columns, not partition keys
+For V1:
 
-Important guardrail:
-
-- do not spatially shard datasets before transforms that need wide spatial context, such as IDW, KDE, or kriging
-
-This means V1 will likely be:
-
-- date-only in bronze
-- date-only in early silver
-- optionally date plus spatial shard in later silver or gold
+- do not partition by country
+- do not add spatial shard keys to bronze, silver, or gold
+- keep spatial IDs such as H3 cells as columns, not partition keys
 
 ## Bronze Adoption and Migration
 
