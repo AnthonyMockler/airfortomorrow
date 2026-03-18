@@ -64,12 +64,20 @@ Important rules:
 
 - Bronze is never used as a place to hide cleaning logic.
 - Silver is where deduplication, outlier handling, interpolation, KDE, IDW, kriging, and similar logic belong.
+- Every published silver dataset should be plain Parquet with `h3_08` as its only managed spatial key.
+- Published silver outputs should not carry lat/lon geometry columns, GeoParquet metadata, or alternate spatial encodings.
 - Gold is where source-specific silver datasets are merged into model features.
 - If we want to compare algorithm variants later, they should become separate published silver dataset IDs rather than mutating one hidden implementation.
 
 ### 3. Storage Rules
 
 Managed analytical layers should be Parquet.
+
+For silver specifically:
+
+- publish plain Parquet only
+- use `h3_08` as the only spatial encoding in the managed output
+- convert source coordinates or geometry to `h3_08` inside the transform, not in the published schema
 
 Bronze should follow source family rules:
 
@@ -84,6 +92,8 @@ Bronze should stay as close to the downloaded source as practical:
 - no pretending that processed parquet is raw data
 
 The only exception is live APIs, where there is no stable source file to preserve. In that case, bronze should store a lossless daily record bundle that keeps the original source record content.
+
+Raw coordinates or source-native geometry can still exist in bronze where the source provides them. The H3-only rule applies to published silver datasets.
 
 ### 4. Runtime Shape
 

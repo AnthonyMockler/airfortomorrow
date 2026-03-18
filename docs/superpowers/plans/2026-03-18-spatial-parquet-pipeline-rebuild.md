@@ -56,6 +56,7 @@ The plan must keep these architecture decisions:
 
 - bronze is canonical
 - silver is rebuildable
+- published silver datasets are plain Parquet with `h3_08` as the only managed spatial key
 - gold is explicit
 - predictions read from gold
 - file/archive bronze remains source-native
@@ -65,6 +66,8 @@ The plan must keep these architecture decisions:
 - Himawari bronze should be validated and relocated before adoption
 - ERA5 `earthkit_cache` should not be adopted until understood
 - cache is allowed only for heavy binary geospatial formats
+
+Raw coordinates may exist in bronze where the source provides them, but published silver outputs should not carry lat/lon geometry columns, GeoParquet metadata, or alternate spatial encodings.
 
 ## Execution Model
 
