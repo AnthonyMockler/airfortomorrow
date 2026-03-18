@@ -128,6 +128,8 @@ Classification should be explicit and testable:
 
 - use normalized metadata values
 - use explicit matching rules or a small table-driven mapping
+- keep the classification code in Python, but keep the known reference-grade and low-cost patterns in config
+- normalize values case-insensitively and punctuation-insensitively before matching
 - do not silently treat unknown OpenAQ metadata as `reference_grade`
 
 Recommended v1 precedence:
@@ -136,7 +138,14 @@ Recommended v1 precedence:
 2. Else if any normalized instrument, provider, or owner value matches a known low-cost network or manufacturer such as `airgradient`, `clarity`, or `habitatmap`, classify as `low_cost`.
 3. Else fail classification and extend the explicit mapping.
 
-If an OpenAQ sensor cannot be classified deterministically as `reference_grade` or `low_cost`, the materialization should fail loudly enough that the mapping can be extended. Do not silently guess.
+If an OpenAQ sensor cannot be classified deterministically as `reference_grade` or `low_cost`, or if its metadata matches both classes, the row should be dropped and logged loudly enough that the mapping can be extended. Do not silently guess.
+
+For v1:
+
+- unknown classification => drop the row and log it loudly
+- conflicting classification => drop the row and log it loudly
+- include counts plus a small sample of dropped metadata values in durable operator-facing notes
+- do not fail the whole day materialization just because a few rows were unclassified or ambiguous
 
 ### 3. Convert To H3 Early
 

@@ -90,9 +90,19 @@ For gold specifically:
 - publish plain Parquet only
 - use a dense `h3_08` grid as the base table for each `date_utc`
 - parameterize the grid by the requested country list rather than hardcoding THA+LAO
-- cache the generated grid by a deterministic key such as sorted countries, H3 resolution, and boundary version
+- use the existing [`src/utils/boundary_utils.py`](/Users/anthonymockler/Documents/unicef/airfortomorrow/src/utils/boundary_utils.py) path in v1 rather than inventing a new boundary-loading stack
+- cache one grid per `ISO3` country and H3 resolution, then union/deduplicate those per-country grids for the requested country set
+- store cached grids outside the medallion layers, for example under `data/cache/grids/...`
+- normalize requested country sets by sorting them before cache resolution or grid assembly
+- revisit the current boundary/grid generation path later; the GeoPandas/geowrangler-based approach is a known performance and code-quality cleanup target
 - revisit later whether label shifting should move from training code into the gold build itself
 - keep the training reference-dominance threshold configurable rather than hardcoding it into the architecture
+
+For published dataset paths in v1, use a simple physical layout such as:
+
+- `data/bronze/<dataset_name>/date_utc=YYYY-MM-DD/`
+- `data/silver/<dataset_name>/date_utc=YYYY-MM-DD/`
+- `data/gold/<dataset_name>/date_utc=YYYY-MM-DD/`
 
 Bronze should follow source family rules:
 
@@ -158,13 +168,24 @@ That manifest should be simple and readable. It should inline the important meta
 
 At minimum, each partition manifest should record:
 
-- dataset ID
-- partition keys
-- publish time
-- files written
-- upstream inputs used
-- coverage/readiness summary
-- artifact list for bronze partitions, including path, size, and checksum
+- `dataset_id`
+- `partition`
+- `run_id`
+- `created_at_utc`
+- `status`
+- `inputs`
+- `files`
+- `notes`
+
+For v1, keep this intentionally simple:
+
+- write `manifest.json` directly inside the published partition directory
+- use `date_utc` consistently as the partition key in the first slice
+- store `inputs` as upstream `dataset_id + partition` references, not raw manifest paths
+- store `files` as objects with `path`, `size_bytes`, and `checksum`
+- treat `checksum` as `xxh64` by default in the schema rather than repeating the algorithm per file
+- keep `notes` as free-form human-readable strings
+- do not invent a second central manifest index; manifests should live only next to their published partitions
 
 This keeps the integrity benefits we want without inventing a heavier manifest hierarchy for v1.
 
@@ -197,6 +218,8 @@ SQLite is acceptable, but only in a narrow role:
 - lightweight lookup index for published partitions
 
 If SQLite disappeared, the system should still be understandable and recoverable from storage plus manifests.
+
+For v1, keep the runtime state in a single predictable file such as `data/system/jobs.sqlite`.
 
 Source-specific bronze fetch window rules should be fixed and explicit in config for v1, not chosen adaptively by the planner at runtime.
 

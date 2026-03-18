@@ -105,6 +105,8 @@ V1 should run from explicit job lists, not filesystem scans.
 
 For any command, the runtime should first compute the full todo list and record it in a simple SQLite `jobs` table. A local worker pool should then claim ready jobs, run them, publish the output partition, write the manifest, and mark the job complete.
 
+For v1, keep this runtime state in `data/system/jobs.sqlite`.
+
 Job granularity should stay simple:
 
 - bronze collection jobs are source-specific
@@ -239,7 +241,7 @@ The first end-to-end path should be:
 5. `predictions.pm25`
 
 Implement `silver.air_quality_observations` against the dedicated contract in [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md).
-Implement `gold.model_features` as a dense `h3_08` grid over the requested country set and `date_utc`, then left-join sparse silver inputs onto that grid. Generate this grid on demand, but cache it by a deterministic key rather than rebuilding it every run.
+Implement `gold.model_features` as a dense `h3_08` grid over the requested country set and `date_utc`, then left-join sparse silver inputs onto that grid. Generate this grid on demand, but cache one grid per `ISO3` country and H3 resolution under `data/cache/grids/...`, then union/deduplicate those per-country grids for the requested country set. Reuse [`src/utils/boundary_utils.py`](/Users/anthonymockler/Documents/unicef/airfortomorrow/src/utils/boundary_utils.py) in v1, and treat a faster replacement for the current GeoPandas/geowrangler-based boundary-to-H3 path as later cleanup work.
 Keep training labels in `gold.model_features` for v1 rather than creating a separate gold label dataset.
 Keep those labels aligned to the same `date_utc = D` for v1, matching the current setup. If training needs a `D -> D+1` shift, keep that in training code for now and revisit later whether it belongs in gold.
 Train on predominantly reference-grade rows using a configurable default threshold, evaluate on reference-grade rows, and run inference on every row in the dense gold grid.
