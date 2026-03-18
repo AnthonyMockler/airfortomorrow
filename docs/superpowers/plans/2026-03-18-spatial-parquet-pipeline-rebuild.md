@@ -1,4 +1,4 @@
-# Spatially Partitioned Parquet Pipeline Rebuild
+# Parquet Pipeline Rebuild
 
 - Status: Planned; simplified v1 revision
 - Owner: Codex + Anthony
@@ -45,8 +45,8 @@ The first supported surface should stay very small:
 - `./scripts/aq_pipeline.sh materialize ...`
 - `./scripts/aq_pipeline.sh build-gold ...`
 - `./scripts/aq_pipeline.sh predict ...`
-- `./scripts/aq_pipeline.sh backfill ...`
-- `./scripts/aq_pipeline.sh status ...`
+
+`backfill` and `status` can be added later as convenience commands after the first slice is working end to end.
 
 The implementation should live in a small new package, likely `src/parquet_pipeline/`, but the package should stay shallow.
 
@@ -165,6 +165,9 @@ Handle bronze source-by-source, conservatively.
 
 - do not adopt current raw directories
 - recollect bronze into the new layout
+- configure OpenAQ historical with `location_id × month` fetch jobs over the archive `csv.gz` objects
+- configure OpenAQ realtime with `date` fetch jobs that may fan out across sensors internally
+- note but defer `sensor_id × date` and multi-day OpenAQ realtime fetch strategies unless day-level fetches prove inadequate
 - store live API bronze as daily `jsonl.gz`
 - preserve raw records without deduplication
 
@@ -173,10 +176,13 @@ Handle bronze source-by-source, conservatively.
 - inspect the current `earthkit_cache`
 - decide what the real bronze artifact should be
 - do not adopt legacy cache blindly
+- keep ERA5 out of the first implementation slice until that decision is made
 
 ### FIRMS
 
 - define the bronze layout around source-native files
+- preserve historical source files as-is
+- collect realtime bronze with one fetch job per poll of the full feed set, recording one artifact per downloaded satellite CSV
 - allow no-detection days to publish cleanly
 
 ## Phase 3: First End-to-End Vertical Slice
