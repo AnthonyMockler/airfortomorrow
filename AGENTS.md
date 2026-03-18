@@ -53,6 +53,16 @@ Air for Tomorrow predicts PM2.5 on an H3 grid using ground sensors (OpenAQ, AirG
 - Narrow Python logic with stable seams: start with `./scripts/run_tests.sh`; add Behave only if user-visible workflow behavior changed.
 - Implement minimal GREEN change, then rerun targeted and regression coverage.
 
+## Verification Evidence
+
+- No coding task is complete without explicit GREEN evidence from the relevant test or verification commands.
+- Do not report `DONE`, `fixed`, `passing`, or equivalent unless you have actually run the verification commands and seen them pass.
+- Status reports must include the exact verification commands that were run and a short result summary such as `9 passed` or `1 feature passed`.
+- Narrative-only claims like "should pass", "looks good", or "implemented but not verified" do not count as completion.
+- If verification is blocked by an unrelated failure, report `BLOCKED` and name the blocking command and failure clearly.
+- If a worker has RED only and no GREEN, treat the task as unfinished.
+- When another agent's work is important to current decisions, prefer rerunning the relevant verification yourself instead of trusting an unverified summary.
+
 ## Test Commands
 
 - Behave default (Tier A): `./scripts/run_behave_tests_compact.sh --tier a`

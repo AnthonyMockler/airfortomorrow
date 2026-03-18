@@ -51,6 +51,9 @@ Rules:
 - never have two coding agents editing the same worktree concurrently
 - read-only review can inspect another worktree, but coding changes should stay isolated to the owning worktree
 - if follow-on work must branch from an in-progress implementation branch, create a fresh worktree from the latest clean commit on that branch rather than sharing its editable workspace
+- do not mark a task `DONE` without explicit GREEN evidence from the relevant verification commands
+- every implementation status update should include the exact commands run and a short result summary
+- if verification is blocked by an unrelated failure, report `BLOCKED` rather than claiming completion
 
 ## Implementation Readiness
 
