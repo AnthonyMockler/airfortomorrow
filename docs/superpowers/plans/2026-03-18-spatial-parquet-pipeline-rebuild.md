@@ -13,14 +13,6 @@ Replace the current brittle workflow with a simpler Python-first pipeline that:
 - materializes gold explicitly
 - keeps the runtime understandable on one machine
 
-## Reset Checkpoint (2026-03-19)
-
-No implementation from the abandoned 2026-03-19 slice branches is being carried forward.
-
-- all related parquet-pipeline rebuild worktrees were removed
-- the experimental slice branches were discarded
-- `main` remains the only source of truth for the rebuild plan and specs
-
 Implementation should restart from this plan, not from any prior WIP branch.
 
 ## V1 Principles
@@ -65,9 +57,7 @@ Keep `main` runnable and deployable throughout the rebuild.
 
 ## Implementation Readiness
 
-No code from this plan has been accepted as implemented yet.
-
-The following work is locked enough to start when implementation restarts:
+The following work is locked enough to start:
 
 - Phase 1: Minimal Runtime Foundation
 - Phase 2: OpenAQ and AirGradient bronze collection for the first slice
