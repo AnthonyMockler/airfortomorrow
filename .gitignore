@@ -38,3 +38,4 @@ venv/
 # Misc
 test/
 targets_tmp*.parquet
+pretty.output
