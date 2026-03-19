@@ -2,7 +2,7 @@
 
 - Status: In Progress; simplified v1 revision
 - Owner: Codex + Anthony
-- Last Updated: 2026-03-18
+- Last Updated: 2026-03-19
 
 ## Goal
 
@@ -12,6 +12,33 @@ Replace the current brittle workflow with a simpler Python-first pipeline that:
 - rebuilds silver cleanly from bronze
 - materializes gold explicitly
 - keeps the runtime understandable on one machine
+
+## Execution Checkpoint (2026-03-19)
+
+Verified implementation work currently lives on isolated `codex/...` branches, not on `main`.
+
+Verified and ready for integration:
+
+- `codex/parquet-pipeline-slice1`
+  - first-slice runtime, bronze/silver/gold/predict foundation
+  - status/progress notes exist, but must be refreshed after the next integration pass
+- `codex/air-quality-classification`
+  - OpenAQ/AirGradient classification and silver materialization alignment
+- `codex/openaq-historical-bronze`
+  - OpenAQ historical bronze archive-path support
+- `codex/parquet-test-tightening`
+  - stronger CLI/runtime/gold contract coverage
+  - correct H3 4.x shape API path
+  - `h3==4.4.2` pin
+
+Do not integrate `codex/parquet-cli-contracts` as-is. Its useful contract coverage was superseded by `codex/parquet-test-tightening`, and its H3 fallback approach was rejected.
+
+Next dispatchable work:
+
+- integrate the verified air-quality classification branch onto the slice branch, then rerun targeted and regression verification
+- integrate the verified OpenAQ historical bronze branch onto the slice branch, then rerun targeted and regression verification
+- integrate the verified test-tightening branch onto the slice branch, then rerun targeted and regression verification
+- refresh the slice-branch plan after each integration step so branch status reflects actual verified progress
 
 ## V1 Principles
 
