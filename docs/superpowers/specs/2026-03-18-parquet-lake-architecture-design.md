@@ -78,10 +78,10 @@ Important rules:
 - Published silver outputs should not carry lat/lon geometry columns, GeoParquet metadata, or alternate spatial encodings.
 - Gold is where source-specific silver datasets are merged into model features.
 - Gold should build from a dense `h3_08` grid for the requested countries and date range, then left-join sparse silver datasets onto that grid.
-- Training labels may live inside `gold.model_features` in v1; downstream training code can split or shift them as needed for now.
 - If we want to compare algorithm variants later, they should become separate published silver dataset IDs rather than mutating one hidden implementation.
 
 The detailed v1 contract for `silver.air_quality_observations` is defined in [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md).
+Gold label and training-policy detail lives in [2026-03-18-gold-labels-and-training-reference.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-gold-labels-and-training-reference.md).
 
 ### 3. Storage Rules
 
