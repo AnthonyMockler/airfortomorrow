@@ -64,6 +64,36 @@ The following work is locked enough to start:
 - Phase 3: `silver.air_quality_observations`
 - Phase 3: dense-grid foundation for `gold.model_features`
 
+## Phase Reading Lists
+
+### Phase 1
+
+Required reading only:
+
+1. [AGENTS.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/AGENTS.md)
+2. [2026-03-18-parquet-lake-architecture-design.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-parquet-lake-architecture-design.md)
+3. [2026-03-19-parquet-phase-1-runtime-brief.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-19-parquet-phase-1-runtime-brief.md)
+4. [2026-03-18-spatial-parquet-pipeline-rebuild.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/plans/2026-03-18-spatial-parquet-pipeline-rebuild.md)
+
+### Phase 2
+
+Required reading only:
+
+1. [AGENTS.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/AGENTS.md)
+2. [2026-03-18-parquet-lake-architecture-design.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-parquet-lake-architecture-design.md)
+3. [2026-03-18-bronze-source-policies.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-bronze-source-policies.md)
+4. [2026-03-18-spatial-parquet-pipeline-rebuild.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/plans/2026-03-18-spatial-parquet-pipeline-rebuild.md)
+
+### Phase 3
+
+Required reading only:
+
+1. [AGENTS.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/AGENTS.md)
+2. [2026-03-18-parquet-lake-architecture-design.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-parquet-lake-architecture-design.md)
+3. [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md)
+4. [2026-03-18-gold-labels-and-training-reference.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-gold-labels-and-training-reference.md)
+5. [2026-03-18-spatial-parquet-pipeline-rebuild.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/plans/2026-03-18-spatial-parquet-pipeline-rebuild.md)
+
 The following work should wait until later decisions are finished:
 
 - Himawari implementation
