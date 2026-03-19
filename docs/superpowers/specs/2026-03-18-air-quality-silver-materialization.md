@@ -32,7 +32,7 @@ This dataset is the first canonical analytical air-quality layer. Bronze remains
 
 `silver.air_quality_observations:<date>` should be built from the relevant OpenAQ and AirGradient bronze inputs for that date.
 
-Sources:
+Logical source families:
 
 - OpenAQ historical bronze
 - OpenAQ realtime bronze
@@ -40,6 +40,12 @@ Sources:
 - AirGradient realtime bronze
 
 Bronze may be partial. Silver should still build from whatever bronze exists for the target date.
+
+Slice 1 implementation rule:
+
+- only treat a bronze source or mode as supported if it is explicitly exposed by the CLI and actually works through silver
+- do not advertise a bronze mode unless it also provides the metadata required for silver classification and aggregation
+- if a bronze source or mode does not yet satisfy that contract, reject it explicitly instead of faking partial support
 
 ## V1 Processing Rules
 
@@ -74,47 +80,7 @@ Rules:
 - OpenAQ readings must not be treated as `reference_grade` by default.
 - OpenAQ classification should be based on sensor metadata retrieved from the OpenAQ API, not on a blanket assumption about the source.
 
-Current code path to learn from:
-
-- `OpenAQCollector._get_sensors_country()` fetches location metadata from `client.locations.list(...)`
-- that code already captures `provider_name` and `owner_name`
-- it also stores a rough `sensor_grade` value, but that field is currently just the first instrument name from the `instruments` list, not a final trusted grade label
-- `src/data_processors/openaq_realtime_client.py` already merges this metadata back onto realtime measurements before saving output
-
-Live confirmation from the OpenAQ API on 2026-03-18:
-
-- a larger Thailand/Laos sample of 783 locations exposed `provider_name`, `owner_name`, and `instruments` exactly as expected
-- observed top providers in that sample were:
-  - `AirGradient` (480)
-  - `Air4Thai` (259)
-  - `Thailand` (33)
-  - `Clarity` (3)
-  - `HabitatMap` (1)
-- observed top instruments in that sample were:
-  - `Unknown AirGradient Sensor` (427)
-  - `Government Monitor` (295)
-  - multiple specific `AirGradient ...` instrument names
-  - `Clarity Sensor`
-  - `HabitatMap Sensor`
-
-That sample gives a much better v1 rule:
-
-- treat `instruments` as the primary classification signal
-- treat known low-cost provider or owner brand names as secondary corroborating signals
-- do not use `provider_name = Thailand` by itself as a reference-grade rule
-- do not use `owner_name = Unknown Governmental Organization` by itself as a reference-grade rule
-
-Observed reference-grade fixtures from the live sample:
-
-- `provider_name = Air4Thai`, `owner_name = Unknown Governmental Organization`, `instruments = ["Government Monitor"]`
-- `provider_name = Thailand`, `owner_name = Unknown Governmental Organization`, `instruments = ["Government Monitor"]`
-
-Observed low-cost fixtures from the live sample:
-
-- `provider_name = AirGradient`, `instruments` containing `Unknown AirGradient Sensor`
-- `provider_name = AirGradient`, `instruments` containing named `AirGradient ...` devices
-- `provider_name = Clarity`, `instruments = ["Clarity Sensor"]`
-- `provider_name = HabitatMap`, `instruments = ["HabitatMap Sensor"]`
+Background reference material, including current-code notes and confirmed OpenAQ metadata examples, lives in [2026-03-18-openaq-classification-reference.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-openaq-classification-reference.md).
 
 For v1, the implementation should build or reuse an explicit OpenAQ sensor-metadata lookup that includes, at minimum:
 
@@ -146,6 +112,10 @@ For v1:
 - conflicting classification => drop the row and log it loudly
 - include counts plus a small sample of dropped metadata values in durable operator-facing notes
 - do not fail the whole day materialization just because a few rows were unclassified or ambiguous
+
+Hard gate:
+
+- a bronze input is not valid for slice 1 silver materialization unless it provides the metadata needed to classify its OpenAQ readings correctly
 
 ### 3. Convert To H3 Early
 

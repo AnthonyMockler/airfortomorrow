@@ -51,6 +51,16 @@ V1 should expose one small supported surface:
 
 The existing codebase remains useful as reference and migration material, but V1 does not need to preserve the current wrappers or current `src/` boundaries.
 
+### 1a. Slice 1 Acceptance Gates
+
+The slice is not ready unless these are true:
+
+- the shell wrapper works when invoked by absolute path from outside the repo root
+- unsupported source or mode combinations fail explicitly and early
+- reruns skip existing published partitions by default unless `--force` is explicitly requested
+- manifests only record upstream inputs that actually existed and were used
+- a source or mode must not be advertised as supported unless it works end to end through the next stage that depends on it
+
 ### 2. Layer Boundaries
 
 The medallion layers should mean exactly this:
@@ -68,9 +78,7 @@ Important rules:
 - Published silver outputs should not carry lat/lon geometry columns, GeoParquet metadata, or alternate spatial encodings.
 - Gold is where source-specific silver datasets are merged into model features.
 - Gold should build from a dense `h3_08` grid for the requested countries and date range, then left-join sparse silver datasets onto that grid.
-- Training labels may live inside `gold.model_features`; training code can split them off later rather than requiring a separate label dataset in v1.
-- For v1, keep labels aligned to the same `date_utc = D` inside `gold.model_features`; if training needs `D -> D+1` shifting, do that in training code for now.
-- For v1, training should use predominantly reference-grade rows, eval/test should use reference-grade rows, and inference should score every row in the dense gold grid.
+- Training labels may live inside `gold.model_features` in v1; downstream training code can split or shift them as needed for now.
 - If we want to compare algorithm variants later, they should become separate published silver dataset IDs rather than mutating one hidden implementation.
 
 The detailed v1 contract for `silver.air_quality_observations` is defined in [2026-03-18-air-quality-silver-materialization.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-air-quality-silver-materialization.md).
@@ -95,8 +103,6 @@ For gold specifically:
 - store cached grids outside the medallion layers, for example under `data/cache/grids/...`
 - normalize requested country sets by sorting them before cache resolution or grid assembly
 - revisit the current boundary/grid generation path later; the GeoPandas/geowrangler-based approach is a known performance and code-quality cleanup target
-- revisit later whether label shifting should move from training code into the gold build itself
-- keep the training reference-dominance threshold configurable rather than hardcoding it into the architecture
 
 For published dataset paths in v1, use a simple physical layout such as:
 
@@ -225,38 +231,7 @@ Source-specific bronze fetch window rules should be fixed and explicit in config
 
 ## Source Policies
 
-### Himawari
-
-- Treat existing NetCDF bronze as likely salvageable.
-- Validate files for truncation/corruption.
-- Relocate them into a cleaner bronze layout.
-- Preserve the files themselves byte-for-byte.
-- Allow a disposable parse cache later if raw decode cost is too high.
-
-### ERA5
-
-- Do not trust `earthkit_cache` as bronze yet.
-- Investigate what those files actually are before deciding the bronze artifact.
-- Do not build the architecture around assumptions about the current cache.
-- Exclude ERA5 from the first implemented slice until the bronze artifact is defined clearly.
-
-### OpenAQ and AirGradient
-
-- Do not adopt the current so-called raw datasets as bronze.
-- Redownload bronze into the new layout.
-- For OpenAQ historical, use `location_id × month` bronze fetch jobs and preserve the original archive `csv.gz` objects.
-- For OpenAQ realtime, use `date` bronze fetch jobs that can fan out across sensors internally and publish one daily `jsonl.gz` bundle.
-- Defer finer-grained `sensor_id × date` jobs and coarser multi-day realtime windows unless the day-level rule proves wrong in practice.
-- For live API collection, bronze should be daily `jsonl.gz` bundles that preserve source records as fetched.
-- Bronze may be partial for these sources.
-- Silver should still build from available bronze by default.
-
-### FIRMS
-
-- Keep source-native CSV or archive artifacts in bronze where practical.
-- For FIRMS historical, preserve source files as-is and treat each source file as a bronze artifact.
-- For FIRMS realtime, use one fetch job per poll of the South East Asia feed set and record each downloaded satellite CSV as its own bronze artifact.
-- Allow `empty_complete` style publication when the source was checked successfully and there were simply no detections.
+Detailed source-family bronze policies live in [2026-03-18-bronze-source-policies.md](/Users/anthonymockler/Documents/unicef/airfortomorrow/docs/superpowers/specs/2026-03-18-bronze-source-policies.md).
 
 ## Partitioning Rules
 
