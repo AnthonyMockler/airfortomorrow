@@ -46,6 +46,7 @@ Air for Tomorrow predicts PM2.5 on an H3 grid using ground sensors (OpenAQ, AirG
   - work in that branch as the sole coding agent, or
   - create a fresh worktree from the latest clean commit on that branch for your own bounded task.
 - Keep each coding agent responsible for a clearly defined write set and report branch/worktree path in status updates.
+- Ignore branches matching `archive/*` and tags matching `archive-*` unless the user explicitly asks to inspect historical work.
 
 ## Test-First Rules
 
