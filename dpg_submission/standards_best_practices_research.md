@@ -1,6 +1,6 @@
 # Standards And Best Practices Research Follow-Up
 
-Status: Research needed
+Status: Researched draft
 Last updated: 2026-04-28
 
 The DPG application asks for a list of open standards, best practices, and principles the solution adheres to, with links wherever possible. This should not be answered by listing every technology in the repository. It should be a curated, evidence-backed answer that connects Air for Tomorrow's actual design to relevant DPG expectations.
@@ -18,6 +18,8 @@ Based on the official questionnaire, submission guide, toolkit, and registry exa
    - open-source project governance practices,
    - data/AI transparency practices,
    - security/privacy practices.
+
+The DPGA featured standards page groups standards across interoperability, data exchange, sector-specific, security, and general formats. Relevant examples for this project include REST, CSV, GeoJSON, GeoTIFF, JSON, UTF-8, XML, and YAML. The DPGA featured best-practices page groups practices across community, interoperability, lifecycle management, testing, security/privacy, system architecture, usability, and other governance frameworks.
 
 ## Likely Candidates For Air For Tomorrow
 
@@ -59,6 +61,64 @@ Use these as examples of how similar projects are described, not as copy sources
 | GeoPrism Registry | Geospatial registry for health, education, agriculture, infrastructure, and services. | Useful comparison for geospatial standards, sharing, and public-sector users. |
 | Ersilia Model Hub | Open-source AI/model platform. | Useful comparison for AI-system framing, model access, and model governance expectations. |
 | Android FHIR SDK / Open Health Stack / DHIS2 | Health-sector interoperability examples. | Only relevant if DHIS2 or health-system integration is documented for Air for Tomorrow. |
+
+## Comparable DPG Review Findings
+
+| DPG | Category / components | Standards and practices pattern | Privacy / do-no-harm pattern | Scale pattern | Useful lesson for Air for Tomorrow |
+|---|---|---|---|---|---|
+| ClimWeb | Software; one assessed GitHub repository; climate/environment web platform. | Registry profile lists the assessed repository and leaves Open Standards & Best Practices as self-reported. | Privacy, security, and inappropriate-content indicators are self-reported. | Describes deployment across 30 countries, available languages, and organizations using it. | Keep a concise climate/environment description and clearly identify the assessed repository and countries. |
+| DiCRA | Software; geospatial climate-resilient agriculture platform; one assessed GitHub repository. | Registry profile emphasizes open access to geospatial datasets and evidence-driven policy. | Privacy and inappropriate-content indicators are self-reported, while open licenses/docs/non-PII data extraction are verified. | Lists participating programme, available language, and organizations using it. | Describe policy-support value while keeping standards claims tied to repo evidence. |
+| GeoPrism Registry | Software; geospatial registry; one assessed GitHub repository. | Profile highlights geospatial and data-collection features; Open Standards & Best Practices is self-reported. | Privacy, security, inappropriate-content, and harassment sections are self-reported. | Lists public-sector users, including Lao PDR Ministry of Health. | Cite geospatial evidence and public-sector use carefully, but avoid unsupported health interoperability claims. |
+| Ersilia Model Hub | Software; open-source AI/model platform; one assessed GitHub repository. | Profile positions the product as an open-source model platform and identifies assessed components. | Governance indicators are largely self-reported except license, ownership, docs, and non-PII extraction. | Scale fields can be "N/A" where not applicable. | Be explicit that Air for Tomorrow is Open Software + Open AI Model and identify `src/models/xgboost_model.json` and `MODELCARD.MD`. |
+
+## Final Candidate Claim Set
+
+### Technical And Data Standards
+
+- H3 geospatial indexing is used as the common spatial grid for ingestion, feature engineering, prediction, and map outputs.
+- Parquet is used for processed source data, engineered silver feature tables, and prediction outputs.
+- CSV is used for static/supporting assets and some source material.
+- YAML is used for repository configuration.
+- JSON is used for the pretrained XGBoost model artifact and API-style source data where applicable.
+- GeoTIFF, NetCDF, and GRIB are used where applicable in satellite and meteorological processing paths.
+- REST/API and FTP-style source access are used for external data collection where upstream sources expose those interfaces.
+
+### Open-Source Governance Practices
+
+- GPL-3.0 licensing.
+- Public repository under the UNICEF GitHub organization.
+- Contribution guidelines.
+- Code of conduct.
+- Issue templates and pull request template.
+- Git/Git LFS large-artifact policy.
+- Changelog and release process documentation.
+
+### Data And AI Transparency Practices
+
+- Model card covering intended use, out-of-scope use, limitations, bias/risks, recommendations, evaluation, feature schema, and citation.
+- External dataset and license inventory with source URLs, terms, and attribution/redistribution notes.
+- Source contracts documenting source-specific expectations and failure modes.
+- README and documentation pages that describe architecture, dataflow, outputs, and limitations.
+
+### Security And Operational Practices
+
+- Runtime credentials via `.env`, with `.env` git-ignored.
+- Security policy with private vulnerability reporting.
+- Support routing that separates usage, bug, and security reports.
+- Dockerized runtime for reproducible setup.
+- CI workflows for tests and notebook hygiene.
+- Scripted test and Behave harnesses documented in repository instructions.
+
+## Final Draft Answer
+
+Air for Tomorrow follows standards and practices in four areas:
+
+1. Technical and data interoperability: H3 for geospatial indexing; Parquet, CSV, YAML, JSON, GeoTIFF, NetCDF, and GRIB where applicable; REST/API and FTP-style access for upstream data services.
+2. Open-source governance: GPL-3.0 licensing, Git/Git LFS, contribution guidelines, code of conduct, issue and PR templates, changelog, and release documentation.
+3. Data and AI transparency: model card, exact model feature schema, evaluation metrics, limitations, external dataset/license inventory, and source contracts.
+4. Security and operations: Dockerized runtime, `.env` runtime credentials, private vulnerability reporting, support routing, CI workflows, and documented operations guidance.
+
+Do not claim formal adherence to FAIR, UNESCO AI ethics, UNICEF Innovation Principles, OGC, ISO, DHIS2/FHIR, or OpenAPI in the DPG application unless supporting documentation is added.
 
 ## Sources Checked
 

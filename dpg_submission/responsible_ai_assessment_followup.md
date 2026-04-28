@@ -46,3 +46,16 @@ Air for Tomorrow is being submitted as Open Software + Open AI Model. Before fin
 6. Does the system avoid PII and user-generated content as currently documented?
 7. Does deployment require any special safeguards when outputs are used by child-facing programmes, schools, or government partners?
 8. Are the current documentation and model-card warnings enough for DPG review, or should the model card be improved?
+
+## Review Decision
+
+Decision: the existing model card is sufficient for the first DPG readiness publication pass.
+
+Rationale:
+
+- Benefits are covered in the model description, uses, direct use, downstream use, and public-health planning language.
+- Harms and misuse risks are covered in out-of-scope use, bias/risks/limitations, recommendations, and evaluation caveats.
+- Child/public-health context is covered through intended users, public-health planning support, UNICEF programme context, and recommendations to combine outputs with local monitoring and official advisories.
+- The model card clearly states the model is trained for Laos and Thailand, is not suitable for other regions without retraining/calibration, does not provide prediction intervals, and should not be used as the sole basis for regulatory, medical, or individual decisions.
+
+No model-card edit is required for this pass. If future UN Global Pulse or UNICEF-specific review requires a structured worksheet, keep that worksheet in `dpg_submission/` and update `MODELCARD.MD` only for public-facing gaps.

@@ -3,7 +3,7 @@
 Status: Draft for review
 Last updated: 2026-04-28
 
-This draft is mapped to the DPGA application questionnaire and uses repository evidence where available. Items marked `NEEDS OWNER INPUT` should be answered by someone authorised to represent the solution owner.
+This draft is mapped to the DPGA application questionnaire and uses repository evidence where available. Final submission should be reviewed by someone authorised to represent the solution owner.
 
 ## General Information
 
@@ -12,7 +12,7 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 | Solution name | Air for Tomorrow | Confirmed as both the repository/software name and the wider programme name. |
 | Aliases | Air for Tomorrow, Air4Tomorrow, A4T | Confirm preferred aliases before submission. |
 | Solution category | Open Software + Open AI Model | Confirmed scope. The repository includes runnable software plus an XGBoost model artifact and model card. |
-| Short description | Open-source AI toolkit for nearcasting PM2.5 air pollution at sub-1 km resolution, with a pretrained model for Laos and Thailand. | Based on README headline and model card. Tighten to match portal length limits. |
+| Short description | Open-source AI toolkit for nearcasting PM2.5 air pollution at sub-1 km resolution, with a pretrained model for Laos and Thailand. | Evidence: `README.md`, `MODELCARD.MD`, `docs/DPG_READINESS.md`. |
 | Website | https://github.com/unicef/airfortomorrow | Project repository and documentation. |
 | Alternate email address | jhanan@unicef.org | Provisional. Marked for review/follow-up before submission. |
 | Source hosting | https://github.com/unicef/airfortomorrow | Public repository URL. |
@@ -21,14 +21,14 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 
 | Question | Draft answer | Evidence / notes |
 |---|---|---|
-| Which SDGs are most relevant? | SDG 3: Good Health and Well-being; SDG 11: Sustainable Cities and Communities; SDG 13: Climate Action. | Confirmed: link the application to all three SDGs. |
-| How is the solution relevant to each selected SDG? | Air for Tomorrow supports PM2.5 situational awareness where monitoring coverage is sparse. It helps governments, UNICEF offices, researchers, and partners anticipate air pollution episodes, communicate public-health risk, and plan mitigation. For SDG 3, it supports action on health risks from air pollution. For SDG 11, it supports monitoring and response to urban and regional air quality. For SDG 13, it helps observe fire, meteorological, and pollution patterns connected to climate and environmental shocks, supporting climate-informed preparedness and resilience. | Need map to exact SDG targets before final answer. Likely targets: 3.9, 11.6, 13.1. |
+| Which SDGs are most relevant? | SDG 3: Good Health and Well-being; SDG 11: Sustainable Cities and Communities; SDG 13: Climate Action. | Evidence: `docs/DPG_READINESS.md`, `README.md`, `MODELCARD.MD`. |
+| How is the solution relevant to each selected SDG? | Air for Tomorrow supports PM2.5 situational awareness where monitoring coverage is sparse. It helps governments, UNICEF offices, researchers, and partners anticipate air pollution episodes, communicate public-health risk, and plan mitigation. For SDG 3, it supports action on health risks from air pollution. For SDG 11, it supports monitoring and response to urban and regional air quality. For SDG 13, it helps observe fire, meteorological, and pollution patterns connected to climate and environmental shocks, supporting climate-informed preparedness and resilience. | Evidence: `docs/DPG_READINESS.md`. Likely target mapping: 3.9, 11.6, 13.1. |
 
 ## 2. Open Licensing
 
 | Question | Draft answer | Evidence / notes |
 |---|---|---|
-| Which open licenses are used? | GPL-3.0 for the software repository. Third-party datasets have separate source licenses and terms documented in the dataset inventory. | `LICENSE`, `README.md`, `EXTERNAL_DATASETS_AND_LICENSES.md`, `MODELCARD.MD`. |
+| Which open licenses are used? | GPL-3.0 for the software repository. Third-party datasets have separate source licenses and terms documented in the dataset inventory. | Evidence: `LICENSE`, `README.md`, `EXTERNAL_DATASETS_AND_LICENSES.md`, `MODELCARD.MD`, `docs/DPG_READINESS.md`. |
 | Evidence of selected licenses | Repository license file: https://github.com/unicef/airfortomorrow/blob/main/LICENSE. External data inventory: https://github.com/unicef/airfortomorrow/blob/main/EXTERNAL_DATASETS_AND_LICENSES.md. | Confirm branch/path before submission. |
 
 ## 3. Clear Ownership
@@ -37,9 +37,9 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 |---|---|---|
 | Who owns this solution? | UNICEF. | Confirmed by project owner. |
 | Evidence of ownership | Repository under UNICEF GitHub organisation; README/model card identify UNICEF teams and collaborators. Supporting impact/ownership context: UNICEF Office of Innovation story, "Addressing Air Pollution with Artificial Intelligence" (23 May 2025), https://www.unicef.org/innovation/stories/addressing-air-pollution-artificial-intelligence. Project repository and documentation: https://github.com/unicef/airfortomorrow. | Use both links in the final application evidence field where space allows. |
-| Type of organisation | International organisation / UN agency. | Confirm exact option available in portal. |
+| Type of organisation | International organisation / UN agency. | Portal option should be selected by the final submitter. |
 | Owner location | Bangkok, Thailand. | Confirmed for this solution's owner office. |
-| Do you own all code, content, and/or data? | UNICEF owns or has rights to redistribute the repository code and model artifacts. All project code is GPL-3.0 licensed. Third-party input datasets remain governed by their original licenses and terms, as documented in `EXTERNAL_DATASETS_AND_LICENSES.md`; the repository does not claim ownership of upstream datasets. | Confirm final wording before submission. |
+| Do you own all code, content, and/or data? | UNICEF owns or has rights to redistribute the repository code and model artifacts. All project code is GPL-3.0 licensed. Third-party input datasets remain governed by their original licenses and terms, as documented in `EXTERNAL_DATASETS_AND_LICENSES.md`; the repository does not claim ownership of upstream datasets. | Evidence: `LICENSE`, `EXTERNAL_DATASETS_AND_LICENSES.md`, `docs/DPG_READINESS.md`. |
 | If not, right to redistribute? | Third-party dataset redistribution rights and attribution constraints are documented in `EXTERNAL_DATASETS_AND_LICENSES.md`; some sources are fetched at runtime using user credentials instead of being redistributed. | Final plan should include a link/provenance check against `EXTERNAL_DATASETS_AND_LICENSES.md`. |
 
 ## 4. Platform Independence
@@ -68,15 +68,15 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 
 | Question | Draft answer | Evidence / notes |
 |---|---|---|
-| Relevant laws | Draft basis: The repository is designed for environmental/geospatial data and does not collect personal data from end users. It should comply with applicable privacy requirements by avoiding PII collection and by using upstream public/environmental datasets under their governing terms. | Existing repo links may be sufficient, but this answer needs agent review before final submission. |
+| Relevant laws | The repository is designed for environmental/geospatial data and does not collect personal data from end users. It supports privacy compliance by avoiding PII collection and by using upstream public/environmental datasets under their governing terms. | Evidence: `SECURITY.md`, `SUPPORT.md`, `EXTERNAL_DATASETS_AND_LICENSES.md`, `MODELCARD.MD`, `docs/DPG_READINESS.md`. |
 | Evidence of adherence | Candidate evidence: repository `SECURITY.md`, `SUPPORT.md`, `EXTERNAL_DATASETS_AND_LICENSES.md`, model card limitations/out-of-scope use, and README intended-use guidance. | Some guidance is already in the model card. Agent follow-up: read/analyze these links before deciding whether to cite additional UNICEF privacy, AI, data protection, or responsible-innovation policy links. |
 
 ## 8. Standards And Best Practices
 
 | Question | Draft answer | Evidence / notes |
 |---|---|---|
-| Open standards adhered to | RESEARCH NEEDED. Candidate standards include H3, Parquet, CSV, YAML, JSON, GeoTIFF/NetCDF/GRIB where applicable, Docker/containerization, Git/Git LFS, and REST/API-based source access where applicable. | See `dpg_submission/standards_best_practices_research.md`. Final answer must be evidence-backed and should compare similar DPG profiles before submission. |
-| Best practices adhered to | RESEARCH NEEDED. Candidate practices include open-source repository governance, code of conduct, contribution guidelines, issue and PR templates, vulnerability reporting, dependency management, reproducible Docker runtime, CI/test workflows, source contracts, model card, external data license inventory, and clear intended-use/limitations. | Do not claim FAIR, UNESCO AI ethics, UNICEF Innovation Principles, ISO, OGC, DHIS2/FHIR, or other frameworks unless repository evidence supports them or docs are updated. |
+| Open standards adhered to | Air for Tomorrow uses H3 geospatial indexing; open data/file formats including Parquet, CSV, YAML, JSON, GeoTIFF, NetCDF, and GRIB where applicable; Docker/containerization; Git/Git LFS; and REST/API or FTP-style source access where upstream sources expose those interfaces. | Evidence: `docs/DPG_READINESS.md`, `dpg_submission/standards_best_practices_research.md`, `README.md`, `docs/SOURCE_CONTRACTS.md`. |
+| Best practices adhered to | Air for Tomorrow follows open-source governance and transparency practices including GPL-3.0 licensing, contribution guidelines, code of conduct, issue and PR templates, vulnerability reporting, dependency management, reproducible Docker runtime, CI/test workflows, source contracts, model card, external data license inventory, and clear intended-use/limitations. | Evidence: `docs/DPG_READINESS.md`, `dpg_submission/standards_best_practices_research.md`. Do not claim FAIR, UNESCO AI ethics, UNICEF Innovation Principles, ISO, OGC, DHIS2/FHIR, or OpenAPI unless supporting docs are added. |
 
 ## 9A. Data Privacy And Security
 
@@ -91,7 +91,7 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 | Question | Draft answer | Evidence / notes |
 |---|---|---|
 | Does the solution collect/store/distribute content? | The core pipeline does not collect, host, or distribute user-generated content. It stores environmental data, model outputs, engineered datasets, generated maps, documentation, and model artifacts. Raw sensor inputs are environmental sensor readings from OpenAQ and AirGradient, not personal data or user-generated content. | Confirmed: no PII and no UGC. |
-| Types of content | Project documentation, generated maps/charts, engineered datasets, prediction outputs, and model artifacts. Raw sensor data are environmental readings from OpenAQ and AirGradient. No user-generated social/content moderation surface is included. | Confirm final wording before submission. |
+| Types of content | Project documentation, generated maps/charts, engineered datasets, prediction outputs, and model artifacts. Raw sensor data are environmental readings from OpenAQ and AirGradient. No user-generated social/content moderation surface is included. | Evidence: `docs/DPG_READINESS.md`, `MODELCARD.MD`. |
 | Handling inappropriate/misleading/illegal content | The repository does not provide an interaction or content-hosting platform. Misleading use is addressed primarily through `MODELCARD.MD`, including intended use, out-of-scope use, risks, limitations, and recommendations. Support and security channels provide reporting routes for issues. | Refer to the model card for this answer. Also complete a responsible-AI risks/harms/benefits follow-up before final submission. If review finds a gap, improve the model card rather than creating a separate policy artifact by default. |
 
 ## 9C. Protection From Harassment
@@ -106,8 +106,8 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 | Question | Draft answer | Evidence / notes |
 |---|---|---|
 | Active deployments | Laos and Thailand. The current pretrained model is designed and implemented for PM2.5 nearcasting across Laos and Thailand. The underlying data engineering workflows are designed for broader adaptation where suitable source data are available, but use outside Laos and Thailand requires local data, calibration/retraining, and validation. The UNICEF Office of Innovation story provides supporting context for the broader Lao PDR air-quality initiative and AI-supported pollution analysis. | Confirm exact deployment dates, operational cadence, and public naming of partners before final submission. Follow the model card and documentation. Do not over-emphasise sensors; they are supporting data infrastructure/training data for the AI model, not the core product. |
-| Other users | UNICEF Lao PDR; UNICEF East Asia and Pacific Regional Office; Lao PDR Ministry of Education and Sports; Lao PDR Ministry of Agriculture and Environment (MAE), including the Natural Resources and Environment Research Institute (NRERI) / Environmental Laboratory; Lao PDR Ministry of Health for possible DHIS2 integration context. | Partner list supplied by project owner. All government partner names and descriptions need further research / future review before submission. DHIS2 integration details need checking/validation before citation. MAE/NRERI naming should be reviewed against `dpg_submission/partner_citations.md`. |
-| Multilingual/regional support | The data engineering workflows are designed for broader geographic adaptation where suitable source data are available. The existing pretrained model is for Laos and Thailand only; use in other regions requires local data, calibration/retraining, and validation. Documentation is provided in English only. | Confirm final wording against `MODELCARD.MD` and repository documentation before submission. |
+| Other users | UNICEF Lao PDR; UNICEF East Asia and Pacific Regional Office; and Lao PDR government partners in education, environment, and health. | Evidence: UNICEF public stories, `dpg_submission/partner_citations.md`. Use specific government partner names only after project-team approval. Do not cite DHIS2 integration unless new supporting evidence is added. |
+| Multilingual/regional support | The data engineering workflows are designed for broader geographic adaptation where suitable source data are available. The existing pretrained model is for Laos and Thailand only; use in other regions requires local data, calibration/retraining, and validation. Documentation is provided in English only. | Evidence: `MODELCARD.MD`, `README.md`, `docs/DPG_READINESS.md`. |
 | Available languages | English. | Documentation is provided in English only. |
 | Programs/initiatives | Air for Tomorrow is both the repository/software name and the wider programme name. The UNICEF Office of Innovation story provides public context for how the programme is being used in the broader air-quality initiative. | Use the UNICEF blog post as the primary public reference; do not invent a separate programme label unless a specific portal option requires it. |
 | Highlights / learn more | UNICEF Office of Innovation story: https://www.unicef.org/innovation/stories/addressing-air-pollution-artificial-intelligence. Project repository and documentation: https://github.com/unicef/airfortomorrow. Partner naming notes: `dpg_submission/partner_citations.md`. | Add example maps, paper/manuscript, or release URLs if public before submission. |

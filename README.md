@@ -147,6 +147,10 @@ Typical first run takes about 20-40 minutes depending on network and compute.
 Canonical inventory (source URLs, license/terms URLs, and attribution constraints):  
 **[External Datasets and Licenses](EXTERNAL_DATASETS_AND_LICENSES.md)**
 
+## 🌐 **Digital Public Goods Readiness**
+
+- **Digital Public Goods readiness:** [DPG readiness evidence](docs/DPG_READINESS.md) summarizes how Air for Tomorrow maps to the DPG Standard.
+
 ---
 
 ## 📁 **Project Structure**
