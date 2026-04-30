@@ -1,7 +1,7 @@
 # Air for Tomorrow DPG Questionnaire Draft
 
 Status: Draft for review
-Last updated: 2026-04-28
+Last updated: 2026-04-30
 
 This draft is mapped to the DPGA application questionnaire and uses repository evidence where available. Final submission should be reviewed by someone authorised to represent the solution owner.
 
@@ -11,7 +11,7 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 |---|---|---|
 | Solution name | Air for Tomorrow | Confirmed as both the repository/software name and the wider programme name. |
 | Aliases | Air for Tomorrow, Air4Tomorrow, A4T | Confirm preferred aliases before submission. |
-| Solution category | Open Software + Open AI Model | Confirmed scope. The repository includes runnable software plus an XGBoost model artifact and model card. |
+| Solution category | Open Software + Open AI Model | Confirmed scope. The repository includes runnable software plus an XGBoost model artifact and model card. See `dpg_submission/open_ai_model_evidence_map.md` for AI-specific evidence and remaining review gaps. |
 | Short description | Open-source AI toolkit for nearcasting PM2.5 air pollution at sub-1 km resolution, with a pretrained model for Laos and Thailand. | Evidence: `README.md`, `MODELCARD.MD`, `docs/DPG_READINESS.md`. |
 | Website | https://github.com/unicef/airfortomorrow | Project repository and documentation. |
 | Alternate email address | jhanan@unicef.org | Provisional. Marked for review/follow-up before submission. |
@@ -54,7 +54,7 @@ This draft is mapped to the DPGA application questionnaire and uses repository e
 
 | Question | Draft answer | Evidence / notes |
 |---|---|---|
-| Where is documentation? | README, DOCUMENTATION, architecture/dataflow/source contracts docs, model card, external data license inventory, contributing/support/security files. | `README.md`, `DOCUMENTATION.md`, `docs/ARCHITECTURE.md`, `docs/DATAFLOW.md`, `docs/SOURCE_CONTRACTS.md`, `docs/RELIABILITY_AND_OPERATIONS.md`, `MODELCARD.MD`, `EXTERNAL_DATASETS_AND_LICENSES.md`. |
+| Where is documentation? | README, DOCUMENTATION, architecture/dataflow/source contracts docs, model card, external data license inventory, contributing/support/security files, and an Open AI Model evidence map for DPG submission review. | `README.md`, `DOCUMENTATION.md`, `docs/ARCHITECTURE.md`, `docs/DATAFLOW.md`, `docs/SOURCE_CONTRACTS.md`, `docs/RELIABILITY_AND_OPERATIONS.md`, `MODELCARD.MD`, `EXTERNAL_DATASETS_AND_LICENSES.md`, `dpg_submission/open_ai_model_evidence_map.md`. |
 | Description of documentation | The repository documents installation with Docker, credentials, pipeline workflows, model features and limitations, source data contracts, architecture, dataflow, operations, contribution process, support, security reporting, and third-party data terms. | Need final public links after branch is published. |
 
 ## 6. Mechanism For Extracting Non-PII Data

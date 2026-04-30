@@ -6,9 +6,11 @@ Current status: working/internal-prep folder. Do not treat these drafts as final
 
 ## Contents
 
+- `TODO.md` - Consolidated checklist of remaining work before DPG submission.
 - `official_resources.md` - DPGA source links used to prepare the evidence pack.
 - `questionnaire_draft.md` - Draft answers mapped to the DPG application questionnaire.
 - `evidence_matrix.md` - Criteria-by-criteria evidence, gaps, and proposed work.
+- `open_ai_model_evidence_map.md` - Open AI Model evidence map, current citations, and AI-specific submission gaps.
 - `impact_evidence_followup.md` - Follow-up checklist for deployment, usage, outcome, and technical impact evidence.
 - `partner_citations.md` - Public partner-name and NRERI/MAE citation notes.
 - `standards_best_practices_research.md` - Follow-up research notes for DPG Indicator 8.
