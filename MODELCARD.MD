@@ -39,6 +39,24 @@ Key characteristics include:
 
 **License:** GPL-3.0
 
+### Version, Data, and Review Metadata
+
+| Field | Value |
+|---|---|
+| Model artifact | `src/models/xgboost_model.json` |
+| Standalone model version | Not yet assigned. For DPG submission, identify the model by the repository release tag or commit that contains the submitted `src/models/xgboost_model.json` artifact. |
+| Model type | XGBoost regressor for daily PM2.5 estimation. |
+| Geographic scope | Lao PDR and Thailand. |
+| Intended use | Daily PM2.5 estimation to complement ground monitoring and support public-health, education, research, and planning workflows. |
+| Training/evaluation dataset | `data/training/silver_dataset.parquet` |
+| Dataset coverage | 2021-12-31 to 2025-10-30, Lao PDR and Thailand. |
+| Evaluation split | Rows before 2025-01-01 are used for training; rows from 2025-01-01 to 2025-10-30 are used as the hold-out evaluation window. |
+| Training/evaluation workflow | `notebooks/air_quality_pipeline_walkthrough.ipynb` |
+| Model license | GPL-3.0, under the repository license. |
+| Source data terms | See `EXTERNAL_DATASETS_AND_LICENSES.md`. |
+| Contact | See "Model Card Contact" below. |
+| Review note | External source-license conformance should be checked before making final DPG Open AI Model claims. |
+
 ## Uses
 
 This model is intended to support environmental monitoring and public health decision-making in regions with limited air quality monitoring infrastructure. It provides real-time PM2.5 estimates for all populated areas of Laos and Thailand by leveraging satellite and meteorological data. Intended users include government agencies, health organizations, NGOs, and researchers. The model's predictions can inform actions such as issuing health advisories, closing schools during severe pollution episodes, or guiding resource allocation for air pollution mitigation.
