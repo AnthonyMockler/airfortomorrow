@@ -18,7 +18,7 @@ Usage:
 Examples:
   ./scripts/run_behave_tests.sh
   ./scripts/run_behave_tests.sh -- --tags=@smoke
-  ./scripts/run_behave_tests.sh --build -- --tags="@quickstart and not @live"
+  ./scripts/run_behave_tests.sh --build -- --tags=@quickstart --tags=~@live
 
 Options:
   --build           Force rebuild of the Docker image before running tests.

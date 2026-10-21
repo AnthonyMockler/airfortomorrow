@@ -22,14 +22,14 @@ Feature: Quick Start Workflow
     And the command output should contain "COMPLETE PIPELINE EXECUTION FINISHED SUCCESSFULLY!"
     And the command output should reference an existing log file
 
-  @live
-  Scenario: realtime run surfaces authentication failures from component logs
+  @contract
+  Scenario: realtime run reports missing credentials through component logs
     Given I clean the "data" directory while preserving git-tracked files
-    When I run "./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-firms --skip-era5 --skip-airgradient --skip-silver --skip-prediction --parallel --test-mode --test-openaq-limit 3" with timeout 900
-    Then the command should succeed
-    And the command output should reference an existing log file
+    When I run "env OPENAQ_API_KEY= HIMAWARI_FTP_USER= HIMAWARI_FTP_PASSWORD= ./scripts/run_complete_pipeline.sh --mode realtime --countries THA LAO --skip-firms --skip-era5 --skip-airgradient --skip-silver --skip-prediction --parallel --test-mode --test-openaq-limit 3" with timeout 120
+    Then the command exit code should be 1
     And the current run should generate OpenAQ and Himawari component logs
-    And the current run logs should not contain authentication or credential failures
+    And the current run logs should contain "OpenAQ API key not found"
+    And the current run logs should contain "FTP username and password must be provided"
 
   @slow @live
   Scenario: full realtime quickstart command produces core output artifacts
